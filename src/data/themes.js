@@ -184,21 +184,45 @@ export const themes = [
   },
 ]
 
-// Generate realistic performance data for each theme across different time periods
+// Realistic 1Y annual return targets and volatility for each theme
+// Based on actual ex-US market performance trends
+const THEME_PARAMS = {
+  'european-defense':    { annualReturn:  0.85, vol: 0.020 }, // Rheinmetall, BAE surging on NATO spending
+  'european-banks':      { annualReturn:  0.48, vol: 0.015 }, // UniCredit, Deutsche Bank strong NII
+  'china-ai-tech':       { annualReturn:  0.38, vol: 0.022 }, // Tencent, Xiaomi AI pivot
+  'em-semiconductors':   { annualReturn:  0.32, vol: 0.018 }, // TSMC, SK Hynix AI chip demand
+  'japan-financials':    { annualReturn:  0.28, vol: 0.014 }, // BOJ rate normalization
+  'european-pharma':     { annualReturn:  0.22, vol: 0.012 }, // GLP-1, oncology pipelines
+  'india-financials':    { annualReturn:  0.18, vol: 0.016 }, // Credit growth cycle
+  'china-consumer':      { annualReturn:  0.15, vol: 0.020 }, // Stimulus-driven recovery
+  'asean-growth':        { annualReturn:  0.14, vol: 0.013 }, // DBS, Sea Limited growth
+  'japan-automation':    { annualReturn:  0.12, vol: 0.015 }, // Keyence, Fanuc steady
+  'india-infrastructure':{ annualReturn:  0.10, vol: 0.017 }, // Govt capex slowing slightly
+  'gulf-diversification':{ annualReturn:  0.08, vol: 0.011 }, // Diversification steady
+  'australia-resources': { annualReturn:  0.07, vol: 0.016 }, // Iron ore mixed, gold up
+  'uk-consumer-staples': { annualReturn:  0.06, vol: 0.008 }, // Defensive, low growth
+  'india-it-services':   { annualReturn:  0.05, vol: 0.012 }, // Muted discretionary spend
+  'canada-energy':       { annualReturn:  0.02, vol: 0.014 }, // Oil range-bound
+  'european-luxury':     { annualReturn: -0.04, vol: 0.016 }, // China demand slowdown
+  'latam-commodities':   { annualReturn: -0.06, vol: 0.018 }, // Commodity softness
+  'european-green-energy':{ annualReturn:-0.12, vol: 0.020 }, // Ørsted, Vestas struggling
+  'korea-batteries':     { annualReturn: -0.18, vol: 0.022 }, // EV demand slowdown
+}
+
 function seededRandom(seed) {
   let x = Math.sin(seed) * 10000
   return x - Math.floor(x)
 }
 
-function generateDailyReturns(themeIndex, days = 365) {
-  const returns = []
-  const baseVol = 0.008 + seededRandom(themeIndex * 100) * 0.012
-  const baseDrift = (seededRandom(themeIndex * 200) - 0.4) * 0.002
+function generateDailyReturns(themeId, themeIndex, days = 365) {
+  const params = THEME_PARAMS[themeId] || { annualReturn: 0.05, vol: 0.015 }
+  const dailyDrift = params.annualReturn / days
+  const dailyVol = params.vol
 
+  const returns = []
   for (let i = 0; i < days; i++) {
-    const noise = (seededRandom(themeIndex * 1000 + i) - 0.5) * 2 * baseVol
-    const momentum = i > 0 ? returns[i - 1] * 0.1 : 0
-    const dailyReturn = baseDrift + noise + momentum
+    const noise = (seededRandom(themeIndex * 1000 + i) - 0.5) * 2 * dailyVol
+    const dailyReturn = dailyDrift + noise
     returns.push(Math.round(dailyReturn * 10000) / 10000)
   }
   return returns
@@ -219,7 +243,7 @@ const TOTAL_DAYS = 365
 const allDates = generateDateRange(TOTAL_DAYS)
 
 export const themePerformanceData = themes.map((theme, idx) => {
-  const dailyReturns = generateDailyReturns(idx, TOTAL_DAYS)
+  const dailyReturns = generateDailyReturns(theme.id, idx, TOTAL_DAYS)
 
   // Build cumulative price series (base 100)
   const priceSeries = [100]
