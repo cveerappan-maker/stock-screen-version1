@@ -1,8 +1,9 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import DateRangePicker from '../components/DateRangePicker'
 import ThemeChart from '../components/ThemeChart'
 import ThemeDetailPanel from '../components/ThemeDetailPanel'
 import { getThemePerformance, getAvailableDateRange } from '../data/themes'
+import { fetchThemePerformance, checkApiHealth } from '../data/api'
 
 const SECTOR_FILTERS = [
   'All',
@@ -46,10 +47,46 @@ export default function ThemePage() {
   const [sectorFilter, setSectorFilter] = useState('All')
   const [regionFilter, setRegionFilter] = useState('All')
 
-  const themeData = useMemo(
+  // Live data state
+  const [liveData, setLiveData] = useState(null)
+  const [isLive, setIsLive] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [apiAvailable, setApiAvailable] = useState(false)
+
+  // Check if backend API is running
+  useEffect(() => {
+    checkApiHealth().then(setApiAvailable)
+  }, [])
+
+  // Fetch live data when API is available and dates change
+  const fetchLive = useCallback(async () => {
+    if (!apiAvailable) return
+    setLoading(true)
+    try {
+      const data = await fetchThemePerformance(startDate, endDate)
+      setLiveData(data)
+      setIsLive(true)
+    } catch (err) {
+      console.warn('Live API failed, using simulated data:', err)
+      setIsLive(false)
+    } finally {
+      setLoading(false)
+    }
+  }, [apiAvailable, startDate, endDate])
+
+  useEffect(() => {
+    if (apiAvailable) {
+      fetchLive()
+    }
+  }, [apiAvailable, fetchLive])
+
+  // Fallback to simulated data
+  const simulatedData = useMemo(
     () => getThemePerformance(startDate, endDate),
     [startDate, endDate]
   )
+
+  const themeData = isLive && liveData ? liveData : simulatedData
 
   const filteredData = useMemo(() => {
     return themeData.filter((t) => {
@@ -86,9 +123,23 @@ export default function ThemePage() {
     <div>
       {/* Header */}
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-white mb-1">Investment Themes</h2>
+        <div className="flex items-center gap-3 mb-1">
+          <h2 className="text-2xl font-bold text-white">Investment Themes</h2>
+          {loading && (
+            <span className="text-xs text-accent animate-pulse">Loading live data...</span>
+          )}
+        </div>
         <p className="text-sm text-neutral">
           Ex-US sectors and sub-sectors ranked by performance. Click a bar to drill down.
+          {isLive ? (
+            <span className="ml-2 text-gain text-xs font-medium px-2 py-0.5 bg-gain/10 rounded-full">
+              LIVE
+            </span>
+          ) : (
+            <span className="ml-2 text-neutral text-xs font-medium px-2 py-0.5 bg-dark-600 rounded-full">
+              SIMULATED
+            </span>
+          )}
         </p>
       </div>
 
@@ -145,7 +196,9 @@ export default function ThemePage() {
           <p className="text-xs text-neutral uppercase tracking-wider mb-1">Best Theme</p>
           <p className="text-sm font-semibold text-white truncate">{stats.best?.name || '—'}</p>
           {stats.best && (
-            <p className="text-sm font-bold text-gain">+{stats.best.totalReturn.toFixed(2)}%</p>
+            <p className={`text-sm font-bold ${stats.best.totalReturn >= 0 ? 'text-gain' : 'text-loss'}`}>
+              {stats.best.totalReturn >= 0 ? '+' : ''}{stats.best.totalReturn.toFixed(2)}%
+            </p>
           )}
         </div>
         <div className="bg-dark-800 rounded-lg border border-dark-600 p-4">
