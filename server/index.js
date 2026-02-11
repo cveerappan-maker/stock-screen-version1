@@ -1,6 +1,7 @@
 import express from 'express'
 import cors from 'cors'
-import yahooFinance from 'yahoo-finance2'
+import YahooFinance from 'yahoo-finance2'
+const yahooFinance = new YahooFinance()
 import { TICKER_MAP } from './tickers.js'
 
 const app = express()
@@ -10,7 +11,7 @@ app.use(cors())
 app.use(express.json())
 
 // Suppress yahoo-finance2 community API notices
-try { yahooFinance.suppressNotices(['yahooSurvey']) } catch { /* method may not exist in all versions */ }
+try { yahooFinance.setGlobalConfig({ notifyRemainingRecovery: false }) } catch { /* config option may not exist in all versions */ }
 
 // In-memory cache: key -> { data, timestamp }
 const cache = new Map()
