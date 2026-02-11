@@ -9,7 +9,7 @@ export const themes = [
     subSector: 'Aerospace & Defense',
     region: 'Europe',
     description: 'European defense contractors benefiting from increased NATO spending',
-    holdings: ['Rheinmetall', 'BAE Systems', 'Leonardo', 'Thales', 'Saab'],
+    holdings: ['Rheinmetall', 'BAE Systems', 'Leonardo', 'Thales', 'Saab', 'Dassault Aviation', 'Hensoldt', 'Kongsberg Gruppen', 'Rolls-Royce', 'Airbus Defence', 'KNDS', 'Chemring', 'QinetiQ', 'Indra Sistemas', 'Babcock International', 'Elbit Systems', 'Rafael', 'Patria', 'MBDA', 'Krauss-Maffei Wegmann'],
   },
   {
     id: 'japan-financials',
@@ -18,7 +18,7 @@ export const themes = [
     subSector: 'Banks',
     region: 'Japan',
     description: 'Japanese banks benefiting from BOJ rate normalization',
-    holdings: ['Mitsubishi UFJ', 'Sumitomo Mitsui', 'Mizuho', 'Nomura', 'Daiwa'],
+    holdings: ['Mitsubishi UFJ', 'Sumitomo Mitsui', 'Mizuho', 'Nomura', 'Daiwa', 'Tokio Marine', 'Japan Post Bank', 'Resona Holdings', 'SBI Holdings', 'Concordia Financial', 'Dai-ichi Life', 'T&D Holdings', 'MS&AD Insurance', 'Sompo Holdings', 'Shinsei Bank', 'Aozora Bank', 'Chiba Bank', 'Shizuoka Financial', 'Fukuoka Financial', 'Seven Bank'],
   },
   {
     id: 'european-luxury',
@@ -27,7 +27,7 @@ export const themes = [
     subSector: 'Luxury Goods',
     region: 'Europe',
     description: 'Global luxury brands with pricing power and aspirational demand',
-    holdings: ['LVMH', 'Hermès', 'Richemont', 'Ferrari', 'Kering'],
+    holdings: ['LVMH', 'Hermès', 'Richemont', 'Ferrari', 'Kering', 'Moncler', 'Brunello Cucinelli', 'Prada', 'Burberry', 'Swatch Group', 'Pandora', 'Hugo Boss', 'Salvatore Ferragamo', 'Tod\'s', 'Ermenegildo Zegna', 'Watches of Switzerland', 'Chow Tai Fook', 'EssilorLuxottica', 'Christian Dior', 'Compagnie Financière Rupert'],
   },
   {
     id: 'india-infrastructure',
@@ -36,7 +36,7 @@ export const themes = [
     subSector: 'Construction & Engineering',
     region: 'India',
     description: 'Indian infrastructure buildout driven by government capex',
-    holdings: ['Larsen & Toubro', 'Adani Ports', 'UltraTech Cement', 'Siemens India', 'ABB India'],
+    holdings: ['Larsen & Toubro', 'Adani Ports', 'UltraTech Cement', 'Siemens India', 'ABB India', 'Adani Enterprises', 'Shree Cement', 'Ambuja Cements', 'Thermax', 'KNR Constructions', 'NCC Ltd', 'IRB Infrastructure', 'Dilip Buildcon', 'NBCC India', 'Cummins India', 'Bharat Electronics', 'Engineers India', 'Kalpataru Projects', 'GMR Airports', 'PNC Infratech'],
   },
   {
     id: 'em-semiconductors',
@@ -45,7 +45,7 @@ export const themes = [
     subSector: 'Semiconductors',
     region: 'Asia-Pacific',
     description: 'Asian chip makers powering AI and global tech supply chains',
-    holdings: ['TSMC', 'Samsung Electronics', 'SK Hynix', 'Tokyo Electron', 'ASM Pacific'],
+    holdings: ['TSMC', 'Samsung Electronics', 'SK Hynix', 'Tokyo Electron', 'ASM Pacific', 'MediaTek', 'Renesas Electronics', 'Advantest', 'Screen Holdings', 'Disco Corp', 'Lasertec', 'United Microelectronics', 'Nanya Technology', 'Rohm Co', 'Murata Manufacturing', 'TDK Corp', 'Sumco Corp', 'Win Semiconductors', 'Silergy Corp', 'Realtek Semiconductor'],
   },
   {
     id: 'latam-commodities',
@@ -54,7 +54,7 @@ export const themes = [
     subSector: 'Metals & Mining',
     region: 'Latin America',
     description: 'Latin American miners and commodity producers',
-    holdings: ['Vale', 'Grupo México', 'Southern Copper', 'SQM', 'Petrobras'],
+    holdings: ['Vale', 'Grupo México', 'Southern Copper', 'SQM', 'Petrobras', 'Gerdau', 'Ternium', 'Cemex', 'Suzano', 'Klabin', 'Braskem', 'Companhia Siderúrgica Nacional', 'Usiminas', 'Alpek', 'Minerva Foods', 'Ecopetrol', 'YPF', 'Buenaventura', 'Volcan Compañía Minera', 'Sociedad Química y Minera'],
   },
   {
     id: 'european-green-energy',
@@ -63,7 +63,7 @@ export const themes = [
     subSector: 'Renewable Energy',
     region: 'Europe',
     description: 'European renewable energy and clean transition plays',
-    holdings: ['Iberdrola', 'Ørsted', 'Vestas', 'Siemens Energy', 'EDP Renováveis'],
+    holdings: ['Iberdrola', 'Ørsted', 'Vestas', 'Siemens Energy', 'EDP Renováveis', 'Enel', 'RWE', 'SSE', 'Nordex', 'Solaria Energía', 'Acciona Energía', 'Verbund', 'Encavis', 'Energiekontor', 'SMA Solar', 'Meyer Burger', 'Scatec', 'Grenergy Renovables', 'Voltalia', 'Neoen'],
   },
   {
     id: 'china-consumer',
@@ -72,7 +72,7 @@ export const themes = [
     subSector: 'E-Commerce & Retail',
     region: 'China',
     description: 'Chinese consumer and e-commerce recovery plays',
-    holdings: ['Alibaba', 'JD.com', 'PDD Holdings', 'Meituan', 'Li Auto'],
+    holdings: ['Alibaba', 'JD.com', 'PDD Holdings', 'Meituan', 'Li Auto', 'BYD', 'Nio', 'XPeng', 'Trip.com', 'Vipshop', 'Miniso', 'Luckin Coffee', 'Anta Sports', 'Li Ning', 'Haidilao', 'China Tourism Group Duty Free', 'Yum China', 'Pop Mart', 'Zhongsheng Group', 'Geely Auto'],
   },
   {
     id: 'india-it-services',
@@ -81,7 +81,7 @@ export const themes = [
     subSector: 'IT Services & Consulting',
     region: 'India',
     description: 'Indian IT outsourcing giants with global enterprise clients',
-    holdings: ['TCS', 'Infosys', 'Wipro', 'HCL Tech', 'Tech Mahindra'],
+    holdings: ['TCS', 'Infosys', 'Wipro', 'HCL Tech', 'Tech Mahindra', 'LTIMindtree', 'Mphasis', 'Persistent Systems', 'Coforge', 'L&T Technology Services', 'Cyient', 'Zensar Technologies', 'Birlasoft', 'KPIT Technologies', 'Tata Elxsi', 'Firstsource Solutions', 'eClerx Services', 'Mastek', 'Happiest Minds', 'NIIT Technologies'],
   },
   {
     id: 'european-banks',
@@ -90,7 +90,7 @@ export const themes = [
     subSector: 'Banks',
     region: 'Europe',
     description: 'European banks benefiting from higher rate environment',
-    holdings: ['BNP Paribas', 'Deutsche Bank', 'UBS', 'Santander', 'UniCredit'],
+    holdings: ['BNP Paribas', 'Deutsche Bank', 'UBS', 'Santander', 'UniCredit', 'ING Group', 'Intesa Sanpaolo', 'Société Générale', 'Credit Agricole', 'BBVA', 'Commerzbank', 'ABN AMRO', 'Nordea', 'Danske Bank', 'CaixaBank', 'KBC Group', 'Bankinter', 'Erste Group', 'DNB Bank', 'Swedbank'],
   },
   {
     id: 'korea-batteries',
@@ -99,7 +99,7 @@ export const themes = [
     subSector: 'Electrical Equipment',
     region: 'South Korea',
     description: 'Korean battery and EV supply chain leaders',
-    holdings: ['LG Energy Solution', 'Samsung SDI', 'SK Innovation', 'Hyundai Motor', 'POSCO Future M'],
+    holdings: ['LG Energy Solution', 'Samsung SDI', 'SK Innovation', 'Hyundai Motor', 'POSCO Future M', 'Kia Corp', 'LG Chem', 'SK On', 'EcoPro BM', 'EcoPro', 'L&F Co', 'POSCO Holdings', 'Samsung Electro-Mechanics', 'Hanon Systems', 'HL Mando', 'Hyundai Mobis', 'SK IE Technology', 'Kumho Petrochemical', 'Doosan Fuel Cell', 'S-Oil'],
   },
   {
     id: 'japan-automation',
@@ -108,7 +108,7 @@ export const themes = [
     subSector: 'Machinery & Robotics',
     region: 'Japan',
     description: 'Japanese robotics and factory automation leaders',
-    holdings: ['Fanuc', 'Keyence', 'SMC Corp', 'Yaskawa', 'Nidec'],
+    holdings: ['Fanuc', 'Keyence', 'SMC Corp', 'Yaskawa', 'Nidec', 'Omron', 'Mitsubishi Electric', 'Komatsu', 'Kubota', 'Daikin Industries', 'Harmonic Drive Systems', 'THK', 'Nabtesco', 'CKD Corp', 'Hiwin Technologies', 'Daifuku', 'Hamamatsu Photonics', 'Shimadzu', 'Amada Holdings', 'DMG Mori'],
   },
   {
     id: 'asean-growth',
@@ -117,7 +117,7 @@ export const themes = [
     subSector: 'Diversified Financials',
     region: 'Southeast Asia',
     description: 'Southeast Asian growth driven by demographics and digitization',
-    holdings: ['DBS Group', 'Bank Central Asia', 'Sea Limited', 'Grab Holdings', 'Bangkok Bank'],
+    holdings: ['DBS Group', 'Bank Central Asia', 'Sea Limited', 'Grab Holdings', 'Bangkok Bank', 'OCBC', 'UOB', 'Bank Rakyat Indonesia', 'Bank Mandiri', 'Telkom Indonesia', 'Kasikornbank', 'Public Bank Malaysia', 'CIMB Group', 'Maybank', 'Singapore Telecom', 'Wilmar International', 'Charoen Pokphand Foods', 'SM Investments', 'Ayala Corp', 'BDO Unibank'],
   },
   {
     id: 'european-pharma',
@@ -126,7 +126,7 @@ export const themes = [
     subSector: 'Pharmaceuticals',
     region: 'Europe',
     description: 'European pharmaceutical leaders with GLP-1 and oncology pipelines',
-    holdings: ['Novo Nordisk', 'AstraZeneca', 'Roche', 'Novartis', 'Sanofi'],
+    holdings: ['Novo Nordisk', 'AstraZeneca', 'Roche', 'Novartis', 'Sanofi', 'GSK', 'Bayer', 'UCB', 'Genmab', 'Lonza', 'Straumann', 'Sartorius', 'BioMérieux', 'Ipsen', 'Hikma Pharmaceuticals', 'Recordati', 'Orion Corp', 'Zealand Pharma', 'Argenx', 'Galderma'],
   },
   {
     id: 'australia-resources',
@@ -135,7 +135,7 @@ export const themes = [
     subSector: 'Mining',
     region: 'Australia',
     description: 'Australian mining majors with iron ore, lithium, and gold exposure',
-    holdings: ['BHP', 'Rio Tinto', 'Fortescue', 'Pilbara Minerals', 'Newmont'],
+    holdings: ['BHP', 'Rio Tinto', 'Fortescue', 'Pilbara Minerals', 'Newmont', 'South32', 'Northern Star Resources', 'Evolution Mining', 'Mineral Resources', 'Lynas Rare Earths', 'IGO Limited', 'Sandfire Resources', 'Iluka Resources', 'Whitehaven Coal', 'Woodside Energy', 'Santos', 'Alumina Limited', 'OZ Minerals', 'Champion Iron', 'Regis Resources'],
   },
   {
     id: 'gulf-diversification',
@@ -144,7 +144,7 @@ export const themes = [
     subSector: 'Integrated Oil & Diversified',
     region: 'Middle East',
     description: 'Gulf state companies diversifying beyond oil',
-    holdings: ['Saudi Aramco', 'ADNOC', 'Emaar Properties', 'Saudi Telecom', 'QNB Group'],
+    holdings: ['Saudi Aramco', 'ADNOC', 'Emaar Properties', 'Saudi Telecom', 'QNB Group', 'First Abu Dhabi Bank', 'Al Rajhi Bank', 'Emirates NBD', 'Saudi National Bank', 'Aldar Properties', 'DAMAC Properties', 'Industries Qatar', 'Savola Group', 'Jarir Marketing', 'Etisalat', 'Ooredoo', 'SABIC', 'Dana Gas', 'Fertiglobe', 'Borouge'],
   },
   {
     id: 'india-financials',
@@ -153,7 +153,7 @@ export const themes = [
     subSector: 'Banks & NBFCs',
     region: 'India',
     description: 'Indian banks and financial companies riding credit growth',
-    holdings: ['HDFC Bank', 'ICICI Bank', 'Bajaj Finance', 'SBI', 'Kotak Mahindra'],
+    holdings: ['HDFC Bank', 'ICICI Bank', 'Bajaj Finance', 'SBI', 'Kotak Mahindra', 'Axis Bank', 'IndusInd Bank', 'Bajaj Finserv', 'Bandhan Bank', 'IDFC First Bank', 'Shriram Finance', 'Muthoot Finance', 'Manappuram Finance', 'Cholamandalam Investment', 'AU Small Finance Bank', 'Federal Bank', 'RBL Bank', 'Punjab National Bank', 'Bank of Baroda', 'HDFC Life Insurance'],
   },
   {
     id: 'china-ai-tech',
@@ -162,7 +162,7 @@ export const themes = [
     subSector: 'Internet & AI',
     region: 'China',
     description: 'Chinese tech giants pivoting to AI and cloud',
-    holdings: ['Tencent', 'Baidu', 'ByteDance', 'SenseTime', 'Xiaomi'],
+    holdings: ['Tencent', 'Baidu', 'ByteDance', 'SenseTime', 'Xiaomi', 'NetEase', 'Kuaishou', 'Bilibili', 'ZTE Corp', 'iFlytek', 'Kingsoft', 'Weibo', 'Zhipu AI', 'Cambricon Technologies', 'Hikvision', 'Lenovo', 'Inspur', 'Huawei (unlisted)', 'SMIC', 'Amec Inc'],
   },
   {
     id: 'canada-energy',
@@ -171,7 +171,7 @@ export const themes = [
     subSector: 'Oil & Gas',
     region: 'Canada',
     description: 'Canadian energy producers with oil sands and LNG exposure',
-    holdings: ['Canadian Natural Resources', 'Suncor', 'Enbridge', 'TC Energy', 'Cenovus'],
+    holdings: ['Canadian Natural Resources', 'Suncor', 'Enbridge', 'TC Energy', 'Cenovus', 'Imperial Oil', 'Pembina Pipeline', 'Keyera Corp', 'ARC Resources', 'Tourmaline Oil', 'MEG Energy', 'Vermilion Energy', 'Whitecap Resources', 'Crescent Point Energy', 'Inter Pipeline', 'Gibson Energy', 'Parex Resources', 'Baytex Energy', 'Freehold Royalties', 'Birchcliff Energy'],
   },
   {
     id: 'uk-consumer-staples',
@@ -180,7 +180,7 @@ export const themes = [
     subSector: 'Food & Beverages',
     region: 'United Kingdom',
     description: 'Defensive UK consumer staples with global brands',
-    holdings: ['Unilever', 'Diageo', 'Reckitt', 'Associated British Foods', 'Tesco'],
+    holdings: ['Unilever', 'Diageo', 'Reckitt', 'Associated British Foods', 'Tesco', 'British American Tobacco', 'Imperial Brands', 'Haleon', 'Sainsbury\'s', 'Marks & Spencer', 'Kerry Group', 'Ocado', 'Greggs', 'Premier Foods', 'Britvic', 'Cranswick', 'Hilton Food', 'Fever-Tree', 'AG Barr', 'Pets at Home'],
   },
 ]
 
