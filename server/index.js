@@ -131,16 +131,35 @@ app.get('/api/themes', async (req, res) => {
       const cachedTheme = getCached(themeKey)
       if (cachedTheme) return cachedTheme
 
-      const tickers = theme.holdings
-        .map(name => TICKER_MAP[name])
-        .filter(Boolean)
+      // Build name-to-ticker pairs for holdings we can resolve
+      const holdingPairs = theme.holdings
+        .map(name => ({ name, ticker: TICKER_MAP[name] }))
+        .filter(p => p.ticker)
         .slice(0, 5)
 
-      // Fetch all 5 tickers for this theme in parallel
+      // Fetch all tickers for this theme in parallel
       const batchResults = await Promise.all(
-        tickers.map(ticker => fetchTickerHistory(ticker, startDate, endDate))
+        holdingPairs.map(p => fetchTickerHistory(p.ticker, startDate, endDate))
       )
-      const histories = batchResults.filter(h => h && h.length > 0)
+
+      const histories = []
+      const holdingReturns = []
+
+      for (let i = 0; i < holdingPairs.length; i++) {
+        const hist = batchResults[i]
+        if (hist && hist.length >= 2) {
+          histories.push(hist)
+          const first = hist[0].close
+          const last = hist[hist.length - 1].close
+          const ret = ((last - first) / first) * 100
+          holdingReturns.push({
+            name: holdingPairs[i].name,
+            returnPct: Math.round(ret * 100) / 100,
+          })
+        }
+      }
+
+      holdingReturns.sort((a, b) => b.returnPct - a.returnPct)
       const perf = computeThemePerformance(histories)
 
       const themeResult = {
@@ -151,7 +170,8 @@ app.get('/api/themes', async (req, res) => {
         region: theme.region,
         description: theme.description,
         holdings: theme.holdings,
-        tickersCovered: tickers.length,
+        holdingReturns,
+        tickersCovered: holdingPairs.length,
         tickersWithData: histories.length,
         totalReturn: perf.totalReturn,
         chartData: perf.chartData,

@@ -281,6 +281,17 @@ export function getThemePerformance(startDate, endDate) {
       })
     }
 
+    // Generate per-holding returns (simulated variation around theme return)
+    const holdingReturns = theme.holdings.map((name, hIdx) => {
+      // Each holding gets a unique spread around the theme return
+      const spread = (seededRandom(idx * 10000 + hIdx * 77 + effectiveStart) - 0.5) * 2
+      const holdingReturn = totalReturn + spread * Math.abs(totalReturn) * 0.6
+      return {
+        name,
+        returnPct: Math.round(holdingReturn * 100) / 100,
+      }
+    }).sort((a, b) => b.returnPct - a.returnPct)
+
     return {
       id: theme.id,
       name: theme.name,
@@ -289,6 +300,7 @@ export function getThemePerformance(startDate, endDate) {
       region: theme.region,
       description: theme.description,
       holdings: theme.holdings,
+      holdingReturns,
       totalReturn: Math.round(totalReturn * 100) / 100,
       chartData,
     }
