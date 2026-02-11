@@ -18,8 +18,10 @@ function CustomTooltip({ active, payload }) {
 }
 
 export default function ThemeChart({ data, onThemeClick }) {
+  const chartHeight = Math.max(400, data.length * 36)
+
   return (
-    <div className="w-full h-[400px]">
+    <div className="w-full" style={{ height: chartHeight }}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart
           data={data}
@@ -36,9 +38,10 @@ export default function ThemeChart({ data, onThemeClick }) {
           <YAxis
             type="category"
             dataKey="name"
-            width={160}
+            width={180}
             tick={{ fill: '#e2e8f0', fontSize: 12 }}
             axisLine={{ stroke: '#243044' }}
+            interval={0}
           />
           <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(59,130,246,0.08)' }} />
           <Bar
