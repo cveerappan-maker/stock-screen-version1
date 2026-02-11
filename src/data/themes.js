@@ -260,7 +260,7 @@ export const themePerformanceData = themes.map((theme, idx) => {
 })
 
 export function getThemePerformance(startDate, endDate) {
-  return themePerformanceData.map((theme) => {
+  return themePerformanceData.map((theme, idx) => {
     const startIdx = theme.dates.findIndex((d) => d >= startDate)
     const endIdx = theme.dates.findIndex((d) => d >= endDate)
 
