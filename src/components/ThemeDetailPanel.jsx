@@ -1,6 +1,20 @@
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell, ReferenceLine,
+  BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  CartesianGrid, Cell, ReferenceLine,
 } from 'recharts'
+
+function AggregateTooltip({ active, payload }) {
+  if (!active || !payload?.length) return null
+  const d = payload[0].payload
+  return (
+    <div className="bg-dark-700 border border-dark-500 rounded px-3 py-2 shadow-lg">
+      <p className="text-xs text-neutral">{d.date}</p>
+      <p className={`text-sm font-bold ${d.value >= 0 ? 'text-gain' : 'text-loss'}`}>
+        {d.value >= 0 ? '+' : ''}{d.value.toFixed(2)}%
+      </p>
+    </div>
+  )
+}
 
 function HoldingTooltip({ active, payload }) {
   if (!active || !payload?.length) return null
@@ -47,6 +61,48 @@ export default function ThemeDetailPanel({ theme, onClose }) {
           </button>
         </div>
       </div>
+
+      {/* Aggregate performance line chart */}
+      {theme.chartData && theme.chartData.length > 0 && (
+        <div className="mb-5">
+          <h4 className="text-xs text-neutral uppercase tracking-wider mb-3">
+            Aggregate Performance
+          </h4>
+          <div className="h-[200px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={theme.chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1a2235" />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fill: '#94a3b8', fontSize: 10 }}
+                  tickFormatter={(d) => {
+                    const parts = d.split('-')
+                    return `${parts[1]}/${parts[2]}`
+                  }}
+                  interval="preserveStartEnd"
+                  minTickGap={50}
+                  axisLine={{ stroke: '#243044' }}
+                />
+                <YAxis
+                  tickFormatter={(v) => `${v}%`}
+                  tick={{ fill: '#94a3b8', fontSize: 10 }}
+                  axisLine={{ stroke: '#243044' }}
+                />
+                <Tooltip content={<AggregateTooltip />} />
+                <ReferenceLine y={0} stroke="#94a3b8" strokeDasharray="3 3" />
+                <Line
+                  type="monotone"
+                  dataKey="value"
+                  stroke={isPositive ? '#22c55e' : '#ef4444'}
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 4, fill: isPositive ? '#22c55e' : '#ef4444' }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
 
       {/* Constituent bar chart */}
       {holdingData.length > 0 ? (
