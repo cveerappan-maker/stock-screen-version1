@@ -125,35 +125,22 @@ app.get('/api/themes', async (req, res) => {
     // We'll receive them from the request or use a shared config
     const { themes } = await import('../src/data/themeDefinitions.js')
 
-    const results = []
-
-    for (const theme of themes) {
+    // Process a single theme: fetch its tickers and compute performance
+    async function processTheme(theme) {
       const themeKey = `${theme.id}-${startDate}-${endDate}`
       const cachedTheme = getCached(themeKey)
+      if (cachedTheme) return cachedTheme
 
-      if (cachedTheme) {
-        results.push(cachedTheme)
-        continue
-      }
-
-      // Get tickers for this theme's holdings
       const tickers = theme.holdings
         .map(name => TICKER_MAP[name])
         .filter(Boolean)
+        .slice(0, 5)
 
-      // Fetch up to 10 tickers per theme to stay within rate limits
-      const tickersToFetch = tickers.slice(0, 10)
-      const histories = []
-
-      for (const ticker of tickersToFetch) {
-        const history = await fetchTickerHistory(ticker, startDate, endDate)
-        if (history && history.length > 0) {
-          histories.push(history)
-        }
-        // Small delay to avoid rate limiting
-        await new Promise(r => setTimeout(r, 200))
-      }
-
+      // Fetch all 5 tickers for this theme in parallel
+      const batchResults = await Promise.all(
+        tickers.map(ticker => fetchTickerHistory(ticker, startDate, endDate))
+      )
+      const histories = batchResults.filter(h => h && h.length > 0)
       const perf = computeThemePerformance(histories)
 
       const themeResult = {
@@ -164,14 +151,28 @@ app.get('/api/themes', async (req, res) => {
         region: theme.region,
         description: theme.description,
         holdings: theme.holdings,
-        tickersCovered: tickersToFetch.length,
+        tickersCovered: tickers.length,
         tickersWithData: histories.length,
         totalReturn: perf.totalReturn,
         chartData: perf.chartData,
       }
 
       setCache(themeKey, themeResult)
-      results.push(themeResult)
+      return themeResult
+    }
+
+    // Process themes in parallel batches of 4 (~20 concurrent ticker fetches)
+    const THEME_BATCH = 4
+    const results = []
+
+    for (let i = 0; i < themes.length; i += THEME_BATCH) {
+      const batch = themes.slice(i, i + THEME_BATCH)
+      const batchResults = await Promise.all(batch.map(processTheme))
+      results.push(...batchResults)
+      // Brief pause between theme batches
+      if (i + THEME_BATCH < themes.length) {
+        await new Promise(r => setTimeout(r, 500))
+      }
     }
 
     // Sort by performance
