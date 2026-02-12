@@ -221,13 +221,10 @@ app.get('/api/stock/:name/financials', async (req, res) => {
     const cached = getCached(cacheKey)
     if (cached) return res.json(cached)
 
-    // Fetch comprehensive financial data from Yahoo Finance
+    // Fetch summary data from Yahoo Finance (non-financial-statement modules)
     const modules = [
       'financialData',
       'defaultKeyStatistics',
-      'incomeStatementHistory',
-      'cashflowStatementHistory',
-      'balanceSheetHistory',
       'summaryDetail',
       'summaryProfile',
       'earningsTrend',
@@ -238,7 +235,6 @@ app.get('/api/stock/:name/financials', async (req, res) => {
       summary = await yahooFinance.quoteSummary(ticker, { modules })
     } catch (err) {
       console.warn(`quoteSummary failed for ${ticker}, trying subset:`, err.message)
-      // Some modules may not be available for all stocks; try a subset
       summary = await yahooFinance.quoteSummary(ticker, {
         modules: ['financialData', 'defaultKeyStatistics', 'summaryDetail', 'summaryProfile']
       })
@@ -249,46 +245,75 @@ app.get('/api/stock/:name/financials', async (req, res) => {
     const sd = summary.summaryDetail || {}
     const sp = summary.summaryProfile || {}
 
-    // Extract historical income statements (up to 4 years)
-    const incomeHist = (summary.incomeStatementHistory?.incomeStatementHistory || [])
-      .map(stmt => ({
-        date: stmt.endDate ? new Date(stmt.endDate).toISOString().split('T')[0] : null,
-        totalRevenue: stmt.totalRevenue ?? null,
-        grossProfit: stmt.grossProfit ?? null,
-        operatingIncome: stmt.operatingIncome ?? null,
-        ebit: stmt.ebit ?? null,
-        netIncome: stmt.netIncome ?? null,
-        incomeTaxExpense: stmt.incomeTaxExpense ?? null,
-        incomeBeforeTax: stmt.incomeBeforeTax ?? null,
-      }))
-      .filter(s => s.date)
-      .sort((a, b) => a.date.localeCompare(b.date))
+    // Helper: extract date string from various formats
+    function toDateStr(d) {
+      if (!d) return null
+      if (typeof d === 'string') return d.split('T')[0]
+      if (d instanceof Date) return d.toISOString().split('T')[0]
+      if (typeof d === 'number') return new Date(d * 1000).toISOString().split('T')[0]
+      return null
+    }
 
-    // Extract historical cash flow statements
-    const cashflowHist = (summary.cashflowStatementHistory?.cashflowStatements || [])
-      .map(stmt => ({
-        date: stmt.endDate ? new Date(stmt.endDate).toISOString().split('T')[0] : null,
-        operatingCashflow: stmt.totalCashFromOperatingActivities ?? null,
-        capex: stmt.capitalExpenditures ?? null,
-        depreciation: stmt.depreciation ?? null,
-        changeInWorkingCapital: stmt.changeToOperatingActivities ?? null,
-      }))
-      .filter(s => s.date)
-      .sort((a, b) => a.date.localeCompare(b.date))
+    // Fetch financial statements via fundamentalsTimeSeries (replaces deprecated quoteSummary modules)
+    const ftsStart = new Date(Date.now() - 6 * 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    let ftsData = []
+    try {
+      ftsData = await yahooFinance.fundamentalsTimeSeries(ticker, {
+        period1: ftsStart,
+        type: 'annual',
+        module: 'all',
+      })
+      console.log(`[${ticker}] fundamentalsTimeSeries returned ${ftsData.length} periods`)
+    } catch (err) {
+      console.warn(`fundamentalsTimeSeries failed for ${ticker}:`, err.message)
+    }
 
-    // Extract historical balance sheet data
-    const balanceHist = (summary.balanceSheetHistory?.balanceSheetStatements || [])
-      .map(stmt => ({
-        date: stmt.endDate ? new Date(stmt.endDate).toISOString().split('T')[0] : null,
-        totalAssets: stmt.totalAssets ?? null,
-        totalLiab: stmt.totalLiab ?? null,
-        totalStockholderEquity: stmt.totalStockholderEquity ?? null,
-        cash: stmt.cash ?? null,
-        shortLongTermDebt: stmt.shortLongTermDebt ?? null,
-        longTermDebt: stmt.longTermDebt ?? null,
+    // Parse income statement data from fundamentalsTimeSeries results
+    const incomeHist = ftsData
+      .filter(entry => entry.totalRevenue != null || entry.netIncome != null)
+      .map(entry => ({
+        date: toDateStr(entry.date),
+        totalRevenue: entry.totalRevenue ?? null,
+        grossProfit: entry.grossProfit ?? null,
+        operatingIncome: entry.operatingIncome ?? null,
+        ebit: entry.EBIT ?? entry.operatingIncome ?? null,
+        netIncome: entry.netIncome ?? null,
+        incomeTaxExpense: entry.taxProvision ?? null,
+        incomeBeforeTax: entry.pretaxIncome ?? null,
       }))
       .filter(s => s.date)
       .sort((a, b) => a.date.localeCompare(b.date))
+    console.log(`[${ticker}] Income statements parsed: ${incomeHist.length}`)
+
+    // Parse cash flow data from fundamentalsTimeSeries results
+    const cashflowHist = ftsData
+      .filter(entry => entry.operatingCashFlow != null || entry.capitalExpenditure != null)
+      .map(entry => ({
+        date: toDateStr(entry.date),
+        operatingCashflow: entry.operatingCashFlow ?? null,
+        capex: entry.capitalExpenditure ?? null,
+        depreciation: entry.depreciationAndAmortization ?? entry.depreciation ?? null,
+        changeInWorkingCapital: entry.changeInWorkingCapital ?? null,
+      }))
+      .filter(s => s.date)
+      .sort((a, b) => a.date.localeCompare(b.date))
+    console.log(`[${ticker}] Cash flow statements parsed: ${cashflowHist.length}`)
+
+    // Parse balance sheet data from fundamentalsTimeSeries results
+    const balanceHist = ftsData
+      .filter(entry => entry.totalAssets != null || entry.stockholdersEquity != null)
+      .map(entry => ({
+        date: toDateStr(entry.date),
+        totalAssets: entry.totalAssets ?? null,
+        totalLiab: entry.totalLiabilitiesNetMinorityInterest ?? null,
+        totalStockholderEquity: entry.stockholdersEquity ?? null,
+        cash: entry.cashAndCashEquivalents ?? null,
+        shortLongTermDebt: entry.currentDebt ?? null,
+        longTermDebt: entry.longTermDebt ?? null,
+      }))
+      .filter(s => s.date)
+      .sort((a, b) => a.date.localeCompare(b.date))
+    console.log(`[${ticker}] Balance sheet statements parsed: ${balanceHist.length}`)
 
     // Derive performance drivers from the data
     const drivers = []
