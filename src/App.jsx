@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import TopNav from './components/TopNav'
 import ThemePage from './pages/ThemePage'
+import PeerAnalysisPage from './pages/PeerAnalysisPage'
 
 function App() {
   return (
@@ -10,6 +11,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Navigate to="/theme" replace />} />
           <Route path="/theme" element={<ThemePage />} />
+          <Route path="/peers" element={<PeerAnalysisPage />} />
         </Routes>
       </main>
     </div>

@@ -18,6 +18,18 @@ export async function fetchStockFinancials(companyName) {
   return res.json()
 }
 
+export async function fetchPeerComparison() {
+  const res = await fetch(`${API_BASE}/peer-comparison`)
+  if (!res.ok) throw new Error(`API error: ${res.status}`)
+  return res.json()
+}
+
+export async function fetchFundHistory(ticker) {
+  const res = await fetch(`${API_BASE}/fund/${encodeURIComponent(ticker)}/history`)
+  if (!res.ok) throw new Error(`API error: ${res.status}`)
+  return res.json()
+}
+
 export async function checkApiHealth() {
   try {
     const res = await fetch(`${API_BASE}/health`)

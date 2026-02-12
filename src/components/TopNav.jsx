@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom'
 
 const tabs = [
   { name: 'Theme', path: '/theme' },
+  { name: 'Peer Analysis', path: '/peers' },
 ]
 
 export default function TopNav() {

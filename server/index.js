@@ -420,6 +420,244 @@ app.get('/api/stock/:name/financials', async (req, res) => {
   }
 })
 
+// ---- PEER ANALYSIS / FUND COMPARISON ----
+
+// Peer fund definitions
+const FUND_UNIVERSE = {
+  DHIAX: { name: 'Diamond Hill International', manager: 'Diamond Hill', style: 'Value' },
+  OAKIX: { name: 'Oakmark International', manager: 'Harris Associates', style: 'Value' },
+  DODFX: { name: 'Dodge & Cox International', manager: 'Dodge & Cox', style: 'Value' },
+  ARTIX: { name: 'Artisan International Value', manager: 'Artisan Partners', style: 'Value' },
+  TFISX: { name: 'T. Rowe Price Intl Stock', manager: 'T. Rowe Price', style: 'Growth' },
+  FIVFX: { name: 'Fidelity International Value', manager: 'Fidelity', style: 'Value' },
+  ACWX: { name: 'iShares MSCI ACWI ex US (Benchmark)', manager: 'BlackRock', style: 'Index' },
+}
+
+const SECTOR_NAME_MAP = {
+  realestate: 'Real Estate',
+  consumer_cyclical: 'Consumer Cyclical',
+  basic_materials: 'Basic Materials',
+  consumer_defensive: 'Consumer Defensive',
+  technology: 'Technology',
+  communication_services: 'Communication Services',
+  financial_services: 'Financial Services',
+  utilities: 'Utilities',
+  industrials: 'Industrials',
+  energy: 'Energy',
+  healthcare: 'Healthcare',
+}
+
+// Fetch fund data from Yahoo Finance
+async function fetchFundData(ticker) {
+  const cacheKey = `fund-${ticker}`
+  const cached = getCached(cacheKey)
+  if (cached) return cached
+
+  const modules = ['topHoldings', 'fundProfile', 'defaultKeyStatistics', 'fundPerformance']
+
+  let summary
+  try {
+    summary = await yahooFinance.quoteSummary(ticker, { modules })
+  } catch (err) {
+    console.warn(`quoteSummary for ${ticker} failed, trying subset:`, err.message)
+    try {
+      summary = await yahooFinance.quoteSummary(ticker, { modules: ['topHoldings', 'defaultKeyStatistics'] })
+    } catch (err2) {
+      console.warn(`quoteSummary subset for ${ticker} also failed:`, err2.message)
+      return null
+    }
+  }
+
+  const th = summary.topHoldings || {}
+  const fp = summary.fundProfile || {}
+  const ks = summary.defaultKeyStatistics || {}
+  const perf = summary.fundPerformance || {}
+
+  // Parse sector weightings
+  const sectorWeights = {}
+  if (th.sectorWeightings) {
+    for (const sw of th.sectorWeightings) {
+      for (const [key, val] of Object.entries(sw)) {
+        const name = SECTOR_NAME_MAP[key] || key
+        sectorWeights[name] = Math.round((val || 0) * 10000) / 100
+      }
+    }
+  }
+
+  // Parse top holdings
+  const holdings = (th.holdings || []).map(h => ({
+    symbol: h.symbol || 'N/A',
+    name: h.holdingName || h.symbol || 'Unknown',
+    weight: Math.round((h.holdingPercent || 0) * 10000) / 100,
+  }))
+
+  // Equity characteristics
+  const eqChar = th.equityHoldings || {}
+
+  // Performance data
+  const perfTrailing = perf.trailingReturns || {}
+  const trailingReturns = {
+    ytd: perfTrailing.ytd ?? null,
+    oneMonth: perfTrailing.oneMonth ?? null,
+    threeMonth: perfTrailing.threeMonth ?? null,
+    oneYear: perfTrailing.oneYear ?? null,
+    threeYear: perfTrailing.threeYear ?? null,
+    fiveYear: perfTrailing.fiveYear ?? null,
+  }
+
+  const result = {
+    ticker,
+    ...(FUND_UNIVERSE[ticker] || { name: ticker }),
+    totalNetAssets: ks.totalAssets ?? null,
+    sectorWeights,
+    holdings,
+    equityCharacteristics: {
+      priceToEarnings: eqChar.priceToEarnings ?? null,
+      priceToBook: eqChar.priceToBook ?? null,
+      priceToSales: eqChar.priceToSales ?? null,
+      priceToCashflow: eqChar.priceToCashflow ?? null,
+      medianMarketCap: eqChar.medianMarketCap ?? null,
+      threeYearEarningsGrowth: eqChar.threeYearEarningsGrowth ?? null,
+    },
+    trailingReturns,
+    category: fp.categoryName ?? null,
+  }
+
+  setCache(cacheKey, result)
+  return result
+}
+
+// API: Get single fund data
+app.get('/api/fund/:ticker', async (req, res) => {
+  try {
+    const data = await fetchFundData(req.params.ticker.toUpperCase())
+    if (!data) return res.status(404).json({ error: 'Fund data not available' })
+    res.json(data)
+  } catch (err) {
+    console.error(`Error fetching fund ${req.params.ticker}:`, err)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// API: Full peer comparison
+app.get('/api/peer-comparison', async (req, res) => {
+  try {
+    const cacheKey = 'peer-comparison'
+    const cached = getCached(cacheKey)
+    if (cached) return res.json(cached)
+
+    const tickers = Object.keys(FUND_UNIVERSE)
+    const results = {}
+
+    // Fetch all funds in parallel batches of 3
+    for (let i = 0; i < tickers.length; i += 3) {
+      const batch = tickers.slice(i, i + 3)
+      const batchResults = await Promise.all(batch.map(fetchFundData))
+      for (let j = 0; j < batch.length; j++) {
+        if (batchResults[j]) results[batch[j]] = batchResults[j]
+      }
+      if (i + 3 < tickers.length) await new Promise(r => setTimeout(r, 500))
+    }
+
+    // Compute comparative analytics
+    const benchmark = results['ACWX']
+    const dhiax = results['DHIAX']
+
+    // Active sector weights (DHIAX vs benchmark)
+    const activeSectorWeights = {}
+    if (dhiax && benchmark) {
+      const allSectors = new Set([
+        ...Object.keys(dhiax.sectorWeights || {}),
+        ...Object.keys(benchmark.sectorWeights || {}),
+      ])
+      for (const sector of allSectors) {
+        const fund = dhiax.sectorWeights[sector] || 0
+        const bench = benchmark.sectorWeights[sector] || 0
+        activeSectorWeights[sector] = {
+          fund: Math.round(fund * 100) / 100,
+          benchmark: Math.round(bench * 100) / 100,
+          active: Math.round((fund - bench) * 100) / 100,
+        }
+      }
+    }
+
+    // Holdings overlap: find stocks held by multiple funds
+    const holdingsMap = {} // symbol -> { name, funds: [{ ticker, weight }] }
+    for (const [fundTicker, fundData] of Object.entries(results)) {
+      if (!fundData?.holdings) continue
+      for (const h of fundData.holdings) {
+        if (!h.symbol || h.symbol === 'N/A') continue
+        if (!holdingsMap[h.symbol]) {
+          holdingsMap[h.symbol] = { name: h.name, symbol: h.symbol, funds: [] }
+        }
+        holdingsMap[h.symbol].funds.push({ ticker: fundTicker, weight: h.weight })
+      }
+    }
+    // Sort by number of funds holding it (most common first)
+    const holdingsOverlap = Object.values(holdingsMap)
+      .sort((a, b) => b.funds.length - a.funds.length)
+
+    // Conviction positions: DHIAX holdings not in benchmark top holdings
+    const benchHoldingSymbols = new Set((benchmark?.holdings || []).map(h => h.symbol))
+    const dhiaxOnly = (dhiax?.holdings || []).filter(h => !benchHoldingSymbols.has(h.symbol))
+
+    // Peer sector tilts relative to benchmark
+    const peerSectorTilts = {}
+    for (const [fundTicker, fundData] of Object.entries(results)) {
+      if (fundTicker === 'ACWX' || !fundData?.sectorWeights || !benchmark?.sectorWeights) continue
+      peerSectorTilts[fundTicker] = {}
+      for (const sector of Object.keys(SECTOR_NAME_MAP).map(k => SECTOR_NAME_MAP[k])) {
+        const f = fundData.sectorWeights[sector] || 0
+        const b = benchmark.sectorWeights[sector] || 0
+        peerSectorTilts[fundTicker][sector] = Math.round((f - b) * 100) / 100
+      }
+    }
+
+    const response = {
+      funds: results,
+      activeSectorWeights,
+      holdingsOverlap,
+      dhiaxConvictionPositions: dhiaxOnly,
+      peerSectorTilts,
+      generatedAt: new Date().toISOString(),
+    }
+
+    setCache(cacheKey, response)
+    res.json(response)
+  } catch (err) {
+    console.error('Error in peer comparison:', err)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// API: Fetch fund price history for trailing performance chart
+app.get('/api/fund/:ticker/history', async (req, res) => {
+  try {
+    const ticker = req.params.ticker.toUpperCase()
+    const endDate = new Date().toISOString().split('T')[0]
+    const startDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+
+    const cacheKey = `fund-hist-${ticker}`
+    const cached = getCached(cacheKey)
+    if (cached) return res.json(cached)
+
+    const history = await fetchTickerHistory(ticker, startDate, endDate)
+    if (!history) return res.status(404).json({ error: 'No price data' })
+
+    // Rebase to 100
+    const base = history[0].close
+    const rebased = history.map(h => ({
+      date: h.date,
+      value: Math.round((h.close / base) * 10000) / 100,
+    }))
+
+    setCache(cacheKey, rebased)
+    res.json(rebased)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // API: Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', cached: cache.size })
@@ -429,5 +667,9 @@ app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`)
   console.log(`Endpoints:`)
   console.log(`  GET /api/themes?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD`)
+  console.log(`  GET /api/stock/:name/financials`)
+  console.log(`  GET /api/peer-comparison`)
+  console.log(`  GET /api/fund/:ticker`)
+  console.log(`  GET /api/fund/:ticker/history`)
   console.log(`  GET /api/health`)
 })
