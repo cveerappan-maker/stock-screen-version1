@@ -262,7 +262,7 @@ app.get('/api/stock/:name/financials', async (req, res) => {
         period1: ftsStart,
         type: 'annual',
         module: 'all',
-      })
+      }, { validateResult: false })
       console.log(`[${ticker}] fundamentalsTimeSeries returned ${ftsData.length} periods`)
     } catch (err) {
       console.warn(`[${ticker}] fundamentalsTimeSeries failed:`, err.message)
