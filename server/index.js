@@ -429,7 +429,8 @@ const FUND_UNIVERSE = {
   DODFX: { name: 'Dodge & Cox International', manager: 'Dodge & Cox', style: 'Value' },
   ARTIX: { name: 'Artisan International Value', manager: 'Artisan Partners', style: 'Value' },
   TFISX: { name: 'T. Rowe Price Intl Stock', manager: 'T. Rowe Price', style: 'Growth' },
-  FIVFX: { name: 'Fidelity International Value', manager: 'Fidelity', style: 'Value' },
+  HAINX: { name: 'Harbor International', manager: 'Marathon Asset Mgmt', style: 'Value' },
+  MINGX: { name: 'MFS International Growth', manager: 'MFS', style: 'Growth' },
   ACWX: { name: 'iShares MSCI ACWI ex US (Benchmark)', manager: 'BlackRock', style: 'Index' },
 }
 
@@ -581,25 +582,44 @@ app.get('/api/peer-comparison', async (req, res) => {
       }
     }
 
-    // Holdings overlap: find stocks held by multiple funds
-    const holdingsMap = {} // symbol -> { name, funds: [{ ticker, weight }] }
+    // Normalize company name for matching (same company can trade under different symbols)
+    function normalizeCompanyName(name) {
+      return (name || '')
+        .toLowerCase()
+        .replace(/\b(inc|corp|ltd|plc|sa|ag|se|nv|co|group|holdings|international)\b\.?/g, '')
+        .replace(/[^a-z0-9]/g, '')
+        .trim()
+    }
+
+    // Holdings overlap: match by normalized company name (not just symbol)
+    const holdingsMap = {} // normalizedName -> { name, symbols: [], funds: [{ ticker, weight }] }
     for (const [fundTicker, fundData] of Object.entries(results)) {
       if (!fundData?.holdings) continue
       for (const h of fundData.holdings) {
-        if (!h.symbol || h.symbol === 'N/A') continue
-        if (!holdingsMap[h.symbol]) {
-          holdingsMap[h.symbol] = { name: h.name, symbol: h.symbol, funds: [] }
+        if (!h.name || h.name === 'Unknown') continue
+        const key = normalizeCompanyName(h.name)
+        if (!key) continue
+        if (!holdingsMap[key]) {
+          holdingsMap[key] = { name: h.name, symbols: [], funds: [] }
         }
-        holdingsMap[h.symbol].funds.push({ ticker: fundTicker, weight: h.weight })
+        if (h.symbol && h.symbol !== 'N/A' && !holdingsMap[key].symbols.includes(h.symbol)) {
+          holdingsMap[key].symbols.push(h.symbol)
+        }
+        holdingsMap[key].funds.push({ ticker: fundTicker, weight: h.weight })
       }
     }
     // Sort by number of funds holding it (most common first)
     const holdingsOverlap = Object.values(holdingsMap)
+      .map(h => ({ ...h, symbol: h.symbols.join(' / ') }))
       .sort((a, b) => b.funds.length - a.funds.length)
 
-    // Conviction positions: DHIAX holdings not in benchmark top holdings
-    const benchHoldingSymbols = new Set((benchmark?.holdings || []).map(h => h.symbol))
-    const dhiaxOnly = (dhiax?.holdings || []).filter(h => !benchHoldingSymbols.has(h.symbol))
+    // Conviction positions: DHIAX holdings not in benchmark top holdings (match by name)
+    const benchHoldingNames = new Set(
+      (benchmark?.holdings || []).map(h => normalizeCompanyName(h.name))
+    )
+    const dhiaxOnly = (dhiax?.holdings || []).filter(
+      h => !benchHoldingNames.has(normalizeCompanyName(h.name))
+    )
 
     // Peer sector tilts relative to benchmark
     const peerSectorTilts = {}

@@ -12,7 +12,8 @@ const FUND_COLORS = {
   DODFX: '#10b981', // Emerald
   ARTIX: '#8b5cf6', // Purple
   TFISX: '#ef4444', // Red
-  FIVFX: '#ec4899', // Pink
+  HAINX: '#ec4899', // Pink
+  MINGX: '#06b6d4', // Cyan
   ACWX: '#94a3b8',  // Gray - benchmark
 }
 
