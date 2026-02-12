@@ -1,6 +1,9 @@
 import * as XLSX from 'xlsx'
 
-// Build a 5-year DCF model from real Yahoo Finance financial data
+// Build a 5-year DCF model with linked Excel formulas
+// Sheet 1: Assumptions (editable inputs)
+// Sheet 2: DCF Model (all projections via formulas referencing Assumptions)
+// Sheet 3: Raw Data
 export function generateDCF(financials) {
   const wb = XLSX.utils.book_new()
 
@@ -9,13 +12,12 @@ export function generateDCF(financials) {
   const companyName = financials.companyName
   const ticker = financials.ticker
 
-  // Use the most recent historical data as the base
+  // ---- Extract base data ----
   const latestIncome = incomeStatements[incomeStatements.length - 1] || {}
   const prevIncome = incomeStatements[incomeStatements.length - 2] || {}
   const latestCF = cashflowStatements[cashflowStatements.length - 1] || {}
   const latestBS = balanceSheets[balanceSheets.length - 1] || {}
 
-  // ---- Derive assumptions from actual data ----
   const baseRevenue = latestIncome.totalRevenue || 0
   const prevRevenue = prevIncome.totalRevenue || 0
   const historicalRevenueGrowth = prevRevenue ? (baseRevenue - prevRevenue) / prevRevenue : 0.05
@@ -39,272 +41,408 @@ export function generateDCF(financials) {
   const beta = financials.beta || 1.0
   const riskFreeRate = 0.04
   const marketPremium = 0.055
-  const costOfEquity = riskFreeRate + beta * marketPremium
   const costOfDebt = 0.05
   const debtRatio = latestBS.longTermDebt && latestBS.totalStockholderEquity
-    ? latestBS.longTermDebt / (latestBS.longTermDebt + latestBS.totalStockholderEquity)
-    : 0.30
-  const equityRatio = 1 - debtRatio
-  const wacc = equityRatio * costOfEquity + debtRatio * costOfDebt * (1 - effectiveTaxRate)
+    ? latestBS.longTermDebt / (latestBS.longTermDebt + latestBS.totalStockholderEquity) : 0.30
   const terminalGrowth = 0.025
 
-  // Revenue growth tapering: start from historical, taper to terminal
-  const revenueGrowthRates = []
   const startGrowth = Math.min(Math.max(historicalRevenueGrowth, -0.05), 0.30)
+  const growthRates = []
   for (let i = 0; i < 5; i++) {
-    const rate = startGrowth + (terminalGrowth - startGrowth) * (i / 5)
-    revenueGrowthRates.push(Math.round(rate * 1000) / 1000)
+    growthRates.push(Math.round((startGrowth + (terminalGrowth - startGrowth) * (i / 5)) * 1000) / 1000)
   }
 
-  // ---- Build projected financials ----
   const baseYear = latestIncome.date ? parseInt(latestIncome.date.split('-')[0]) : new Date().getFullYear()
   const projYears = [1, 2, 3, 4, 5].map(i => baseYear + i)
 
-  const proj = { revenue: [], ebit: [], tax: [], da: [], capex: [], wc: [], fcf: [] }
-  let rev = baseRevenue
-  for (let i = 0; i < 5; i++) {
-    rev = rev * (1 + revenueGrowthRates[i])
-    const ebit = rev * ebitMargin
-    const tax = ebit * effectiveTaxRate
-    const nopat = ebit - tax
-    const da = rev * daToRevenue
-    const capex = rev * capexToRevenue
-    const wc = rev * wcToRevenue
-    const fcf = nopat + da - capex - wc
-    proj.revenue.push(Math.round(rev))
-    proj.ebit.push(Math.round(ebit))
-    proj.tax.push(Math.round(tax))
-    proj.da.push(Math.round(da))
-    proj.capex.push(Math.round(capex))
-    proj.wc.push(Math.round(wc))
-    proj.fcf.push(Math.round(fcf))
-  }
-
-  // Terminal value & DCF
-  const terminalFCF = proj.fcf[4] * (1 + terminalGrowth)
-  const terminalValue = terminalFCF / (wacc - terminalGrowth)
-  let pvFCF = 0
-  for (let i = 0; i < 5; i++) pvFCF += proj.fcf[i] / Math.pow(1 + wacc, i + 1)
-  const pvTerminal = terminalValue / Math.pow(1 + wacc, 5)
-  const enterpriseValue = pvFCF + pvTerminal
-  const netDebt = (latestBS.longTermDebt || 0) + (latestBS.shortLongTermDebt || 0) - (latestBS.cash || 0)
-  const equityValue = enterpriseValue - netDebt
-
-  // ---- Helpers ----
-  const n = (v) => v != null ? Math.round(v) : null // null if missing
+  // Convert to $M
+  const toM = (v) => v != null ? Math.round(v / 1e6 * 10) / 10 : null
   const fmtPct = (v) => (v * 100).toFixed(1) + '%'
-  const fmtM = (v) => v != null ? (v / 1e6).toFixed(1) + 'M' : 'N/A'
+  const fmtM = (v) => v != null ? '$' + (v / 1e6).toFixed(1) + 'M' : 'N/A'
 
-  // ---- Historical arrays (last 3 years or however many we have) ----
+  // Historical data (last 3 years)
   const histCount = Math.min(incomeStatements.length, 3)
+  const histIncome = incomeStatements.slice(-histCount)
+  const histCF = cashflowStatements.slice(-histCount)
+  const histYears = histIncome.map(s => s.date?.split('-')[0] || '')
 
-  const histYears = incomeStatements.slice(-histCount).map(s => s.date?.split('-')[0] || '')
-  const histRevenue = incomeStatements.slice(-histCount).map(s => n(s.totalRevenue))
-  const histEBIT = incomeStatements.slice(-histCount).map(s => n(s.ebit || s.operatingIncome))
-  const histTax = incomeStatements.slice(-histCount).map(s => n(s.incomeTaxExpense))
-  const histNetIncome = incomeStatements.slice(-histCount).map(s => n(s.netIncome))
-
-  const cfSlice = cashflowStatements.slice(-histCount)
-  const histDA = cfSlice.map(s => n(Math.abs(s.depreciation || 0)))
-  const histCapex = cfSlice.map(s => n(Math.abs(s.capex || 0)))
-  const histWC = cfSlice.map(s => n(s.changeInWorkingCapital))
-  const histOpCF = cfSlice.map(s => n(s.operatingCashflow))
-
-  // Column structure: [Label] [Hist1] [Hist2] [Hist3] [spacer] [Proj1] [Proj2] [Proj3] [Proj4] [Proj5]
-  // Pad all historical arrays to exactly 3 columns from the left
-  const padH = (arr) => {
-    if (arr.length >= 3) return arr.slice(-3)
-    return [...Array(3 - arr.length).fill(null), ...arr]
+  // ---- Cell helper: sets a cell on a worksheet ----
+  const NUM = '#,##0.0'
+  const PCT = '0.0%'
+  function sc(ws, ref, value, opts = {}) {
+    const c = {}
+    if (opts.f) {
+      c.f = opts.f
+      c.t = 'n'
+    } else if (typeof value === 'number') {
+      c.v = value
+      c.t = 'n'
+    } else if (typeof value === 'string') {
+      c.v = value
+      c.t = 's'
+    } else {
+      return
+    }
+    if (opts.z) c.z = opts.z
+    ws[ref] = c
   }
-  const hYears = padH(histYears)
-  const pYears = projYears.map(String)
 
-  // Row builder: label, historical values (padded to 3), spacer, projected values (5)
-  const row = (label, hist, projected) => [label, ...padH(hist), '', ...projected]
-  const emptyRow = () => Array(10).fill('')
+  // ================================================================
+  // SHEET 1: ASSUMPTIONS (Editable Inputs)
+  // ================================================================
+  const wsA = {}
+  const a = (ref, val, opts) => sc(wsA, ref, val, opts)
 
-  // ---- SHEET 1: DCF Model ----
-  const rows = []
-  rows.push([`${companyName} (${ticker}) — 5-Year DCF Model`])
-  rows.push([`Currency: ${currency}`, '', '', '', `Generated: ${new Date().toISOString().split('T')[0]}`])
-  rows.push(emptyRow())
+  a('A1', `${companyName} (${ticker}) — DCF Assumptions`)
+  a('A2', 'Edit the yellow cells below to change the model. All projected values on the DCF Model sheet update automatically.')
 
-  // Column headers
-  rows.push(row('', hYears, pYears.map(y => `FY${y}E`)))
-  rows.push(emptyRow())
+  a('A4', 'INPUT')
+  a('B4', 'VALUE')
+  a('C4', 'SOURCE / JUSTIFICATION')
 
-  // Revenue
-  rows.push(row('Revenue', histRevenue, proj.revenue))
-  const revGrowthHist = histRevenue.map((v, i, arr) => {
-    if (i === 0 || !arr[i - 1] || !v) return ''
-    return fmtPct((v - arr[i - 1]) / arr[i - 1])
-  })
-  rows.push(row('  Revenue Growth %', revGrowthHist, revenueGrowthRates.map(fmtPct)))
-  rows.push(emptyRow())
+  // -- Base Year Data --
+  a('A6', 'BASE YEAR DATA')
+  a('A7', 'Base Revenue ($M)')
+  a('B7', toM(baseRevenue), { z: NUM })
+  a('C7', `Income statement ending ${latestIncome.date || 'N/A'}`)
+  a('A8', 'Base Year')
+  a('B8', baseYear)
 
-  // EBIT
-  rows.push(row('EBIT (Operating Income)', histEBIT, proj.ebit))
-  const ebitMarginHist = histEBIT.map((v, i) => {
-    const r = histRevenue[i]
-    return (v != null && r) ? fmtPct(v / r) : ''
-  })
-  rows.push(row('  EBIT Margin %', ebitMarginHist, proj.ebit.map((v, i) => fmtPct(v / proj.revenue[i]))))
-  rows.push(emptyRow())
+  // -- Revenue Growth Rates --
+  a('A10', 'REVENUE GROWTH')
+  a('A11', 'Year 1 Revenue Growth')
+  a('B11', growthRates[0], { z: PCT })
+  a('C11', `Historical YoY: ${fmtPct(historicalRevenueGrowth)}. Tapered to terminal rate.`)
+  a('A12', 'Year 2 Revenue Growth')
+  a('B12', growthRates[1], { z: PCT })
+  a('C12', 'Linear interpolation toward terminal growth')
+  a('A13', 'Year 3 Revenue Growth')
+  a('B13', growthRates[2], { z: PCT })
+  a('A14', 'Year 4 Revenue Growth')
+  a('B14', growthRates[3], { z: PCT })
+  a('A15', 'Year 5 Revenue Growth')
+  a('B15', growthRates[4], { z: PCT })
+  a('C15', 'Approaching long-term nominal GDP growth rate')
 
-  // Tax
-  rows.push(row('Income Tax', histTax, proj.tax))
-  rows.push(row('  Eff. Tax Rate', Array(histCount).fill(''), Array(5).fill(fmtPct(effectiveTaxRate))))
-  rows.push(emptyRow())
+  // -- Operating Assumptions --
+  a('A17', 'OPERATING ASSUMPTIONS')
+  a('A18', 'EBIT Margin')
+  a('B18', ebitMargin, { z: PCT })
+  a('C18', `EBIT ${fmtM(baseEBIT)} on revenue ${fmtM(baseRevenue)}`)
+  a('A19', 'Effective Tax Rate')
+  a('B19', effectiveTaxRate, { z: PCT })
+  a('C19', `Tax ${fmtM(taxExpense)} / pre-tax income ${fmtM(preTaxIncome)}`)
+  a('A20', 'D&A (% of Revenue)')
+  a('B20', daToRevenue, { z: PCT })
+  a('C20', `D&A of ${fmtM(baseDA)}`)
+  a('A21', 'CapEx (% of Revenue)')
+  a('B21', capexToRevenue, { z: PCT })
+  a('C21', `CapEx of ${fmtM(baseCapex)}`)
+  a('A22', 'Working Capital (% of Rev)')
+  a('B22', wcToRevenue, { z: PCT })
+  a('C22', `WC change of ${fmtM(baseWC)}`)
 
-  // D&A, CapEx, WC
-  rows.push(row('Depreciation & Amort.', histDA, proj.da))
-  rows.push(row('Capital Expenditures', histCapex, proj.capex))
-  rows.push(row('Change in Working Cap.', histWC, proj.wc))
-  rows.push(emptyRow())
+  // -- WACC Components --
+  a('A24', 'WACC COMPONENTS')
+  a('A25', 'Risk-Free Rate')
+  a('B25', riskFreeRate, { z: PCT })
+  a('C25', '10-year government bond yield')
+  a('A26', 'Beta')
+  a('B26', beta, { z: '0.00' })
+  a('C26', 'Yahoo Finance')
+  a('A27', 'Equity Risk Premium')
+  a('B27', marketPremium, { z: PCT })
+  a('C27', 'Long-term ERP estimate')
+  a('A28', 'Cost of Debt (pre-tax)')
+  a('B28', costOfDebt, { z: PCT })
+  a('C28', 'IG corporate bond yield estimate')
+  a('A29', 'Debt Weight D/(D+E)')
+  a('B29', debtRatio, { z: PCT })
+  a('C29', `LT Debt ${fmtM(latestBS.longTermDebt)}, Equity ${fmtM(latestBS.totalStockholderEquity)}`)
+  a('A30', 'Equity Weight E/(D+E)')
+  sc(wsA, 'B30', null, { f: '1-B29', z: PCT })
+  a('A31', 'Terminal Growth Rate')
+  a('B31', terminalGrowth, { z: PCT })
+  a('C31', '2.5% long-term nominal GDP growth')
 
-  // FCF build (projected only)
-  const nopat = proj.ebit.map((v, i) => Math.round(v - proj.tax[i]))
-  rows.push(row('NOPAT (EBIT - Tax)', Array(histCount).fill(null), nopat))
-  rows.push(row('  + D&A', Array(histCount).fill(null), proj.da))
-  rows.push(row('  - CapEx', Array(histCount).fill(null), proj.capex))
-  rows.push(row('  - Change in WC', Array(histCount).fill(null), proj.wc))
-  rows.push(row('= Unlevered Free Cash Flow', Array(histCount).fill(null), proj.fcf))
-  rows.push(emptyRow())
+  // -- Computed WACC --
+  a('A33', 'COMPUTED WACC')
+  // WACC = E/(D+E)*Ke + D/(D+E)*Kd*(1-t), where Ke = Rf + Beta*ERP
+  sc(wsA, 'B33', null, { f: 'B30*(B25+B26*B27)+B29*B28*(1-B19)', z: PCT })
+  a('C33', 'E/(D+E) x (Rf + Beta x ERP) + D/(D+E) x Kd x (1-t)')
 
-  // Historical operating CF and net income for reference
-  if (histOpCF.some(v => v != null)) {
-    rows.push(row('Operating Cash Flow (actual)', histOpCF, Array(5).fill(null)))
+  // -- Balance Sheet --
+  a('A35', 'BALANCE SHEET ($M)')
+  a('A36', 'Long-Term Debt')
+  a('B36', toM(latestBS.longTermDebt || 0), { z: NUM })
+  a('A37', 'Short-Term Debt')
+  a('B37', toM(latestBS.shortLongTermDebt || 0), { z: NUM })
+  a('A38', 'Cash & Equivalents')
+  a('B38', toM(latestBS.cash || 0), { z: NUM })
+  a('A39', 'Net Debt')
+  sc(wsA, 'B39', null, { f: 'B36+B37-B38', z: NUM })
+
+  // -- Market Data --
+  a('A41', 'MARKET DATA ($M)')
+  a('A42', 'Market Cap')
+  a('B42', toM(financials.marketCap || 0), { z: NUM })
+
+  wsA['!ref'] = 'A1:C42'
+  wsA['!cols'] = [{ wch: 28 }, { wch: 14 }, { wch: 80 }]
+  XLSX.utils.book_append_sheet(wb, wsA, 'Assumptions')
+
+  // ================================================================
+  // SHEET 2: DCF MODEL (All projections are formulas)
+  // ================================================================
+  const wsD = {}
+  const d = (ref, val, opts) => sc(wsD, ref, val, opts)
+
+  const HIST_COLS = ['B', 'C', 'D']
+  const PROJ = ['F', 'G', 'H', 'I', 'J']
+  // Assumptions sheet cell references for each projection year's growth rate
+  const GROWTH = ['Assumptions!B11', 'Assumptions!B12', 'Assumptions!B13', 'Assumptions!B14', 'Assumptions!B15']
+
+  // Place historical values in the right columns (right-aligned to D)
+  const hPad = 3 - histCount
+  function setHist(row, values, fmt) {
+    for (let i = 0; i < values.length; i++) {
+      const col = HIST_COLS[hPad + i]
+      if (col && values[i] != null) d(`${col}${row}`, values[i], fmt ? { z: fmt } : {})
+    }
   }
-  if (histNetIncome.some(v => v != null)) {
-    rows.push(row('Net Income (actual)', histNetIncome, Array(5).fill(null)))
+
+  // ---- Header ----
+  d('A1', `${companyName} (${ticker}) — 5-Year DCF Model`)
+  d('A2', `All figures in $M (${currency})`)
+  d('F2', `Generated: ${new Date().toISOString().split('T')[0]}`)
+
+  // Year headers (row 4)
+  for (let i = 0; i < histCount; i++) d(`${HIST_COLS[hPad + i]}4`, histYears[i])
+  for (let i = 0; i < 5; i++) d(`${PROJ[i]}4`, `FY${projYears[i]}E`)
+
+  // ---- Row 6: Revenue ----
+  d('A6', 'Revenue')
+  setHist(6, histIncome.map(s => toM(s.totalRevenue)), NUM)
+  // Year 1: base revenue * (1 + growth1)
+  sc(wsD, 'F6', null, { f: `Assumptions!B7*(1+${GROWTH[0]})`, z: NUM })
+  // Years 2-5: prior year * (1 + growthN)
+  for (let i = 1; i < 5; i++) {
+    sc(wsD, `${PROJ[i]}6`, null, { f: `${PROJ[i - 1]}6*(1+${GROWTH[i]})`, z: NUM })
   }
-  rows.push(emptyRow())
 
-  // Valuation
-  rows.push(['--- DCF Valuation ---'])
-  rows.push(['WACC', fmtPct(wacc)])
-  rows.push(['Terminal Growth Rate', fmtPct(terminalGrowth)])
-  rows.push(emptyRow())
+  // ---- Row 7: Revenue Growth % ----
+  d('A7', '  Revenue Growth %')
+  for (let i = 1; i < histCount; i++) {
+    const cur = histIncome[i].totalRevenue
+    const prev = histIncome[i - 1].totalRevenue
+    if (cur && prev) d(`${HIST_COLS[hPad + i]}7`, (cur - prev) / prev, { z: PCT })
+  }
+  for (let i = 0; i < 5; i++) sc(wsD, `${PROJ[i]}7`, null, { f: GROWTH[i], z: PCT })
 
-  rows.push(['PV of Projected FCFs (Yr 1-5)', Math.round(pvFCF)])
-  rows.push(['Terminal Value (Yr 5)', Math.round(terminalValue)])
-  rows.push(['PV of Terminal Value', Math.round(pvTerminal)])
-  rows.push(emptyRow())
+  // ---- Row 9: EBIT ----
+  d('A9', 'EBIT (Operating Income)')
+  setHist(9, histIncome.map(s => toM(s.ebit || s.operatingIncome)), NUM)
+  for (let i = 0; i < 5; i++) sc(wsD, `${PROJ[i]}9`, null, { f: `${PROJ[i]}6*Assumptions!B18`, z: NUM })
 
-  rows.push(['Enterprise Value', Math.round(enterpriseValue)])
-  rows.push(['  (-) Net Debt', Math.round(netDebt)])
-  rows.push(['Implied Equity Value', Math.round(equityValue)])
+  // ---- Row 10: EBIT Margin ----
+  d('A10', '  EBIT Margin %')
+  for (let i = 0; i < histCount; i++) {
+    const ebit = histIncome[i].ebit || histIncome[i].operatingIncome
+    const rev = histIncome[i].totalRevenue
+    if (ebit && rev) d(`${HIST_COLS[hPad + i]}10`, ebit / rev, { z: PCT })
+  }
+  for (let i = 0; i < 5; i++) sc(wsD, `${PROJ[i]}10`, null, { f: 'Assumptions!B18', z: PCT })
 
+  // ---- Row 12: Income Tax ----
+  d('A12', 'Income Tax')
+  setHist(12, histIncome.map(s => toM(s.incomeTaxExpense)), NUM)
+  for (let i = 0; i < 5; i++) sc(wsD, `${PROJ[i]}12`, null, { f: `${PROJ[i]}9*Assumptions!B19`, z: NUM })
+
+  // ---- Row 13: Eff. Tax Rate ----
+  d('A13', '  Eff. Tax Rate')
+  for (let i = 0; i < 5; i++) sc(wsD, `${PROJ[i]}13`, null, { f: 'Assumptions!B19', z: PCT })
+
+  // ---- Row 15: D&A ----
+  d('A15', 'Depreciation & Amort.')
+  setHist(15, histCF.map(s => toM(Math.abs(s.depreciation || 0))), NUM)
+  for (let i = 0; i < 5; i++) sc(wsD, `${PROJ[i]}15`, null, { f: `${PROJ[i]}6*Assumptions!B20`, z: NUM })
+
+  // ---- Row 16: CapEx ----
+  d('A16', 'Capital Expenditures')
+  setHist(16, histCF.map(s => toM(Math.abs(s.capex || 0))), NUM)
+  for (let i = 0; i < 5; i++) sc(wsD, `${PROJ[i]}16`, null, { f: `${PROJ[i]}6*Assumptions!B21`, z: NUM })
+
+  // ---- Row 17: WC ----
+  d('A17', 'Change in Working Cap.')
+  setHist(17, histCF.map(s => toM(s.changeInWorkingCapital)), NUM)
+  for (let i = 0; i < 5; i++) sc(wsD, `${PROJ[i]}17`, null, { f: `${PROJ[i]}6*Assumptions!B22`, z: NUM })
+
+  // ---- Row 19-23: FCF Build (formulas only) ----
+  d('A19', 'NOPAT (EBIT - Tax)')
+  for (let i = 0; i < 5; i++) {
+    const c = PROJ[i]
+    sc(wsD, `${c}19`, null, { f: `${c}9-${c}12`, z: NUM })
+  }
+
+  d('A20', '  + D&A')
+  for (let i = 0; i < 5; i++) sc(wsD, `${PROJ[i]}20`, null, { f: `${PROJ[i]}15`, z: NUM })
+
+  d('A21', '  - CapEx')
+  for (let i = 0; i < 5; i++) sc(wsD, `${PROJ[i]}21`, null, { f: `${PROJ[i]}16`, z: NUM })
+
+  d('A22', '  - Change in WC')
+  for (let i = 0; i < 5; i++) sc(wsD, `${PROJ[i]}22`, null, { f: `${PROJ[i]}17`, z: NUM })
+
+  d('A23', '= Unlevered Free Cash Flow')
+  for (let i = 0; i < 5; i++) {
+    const c = PROJ[i]
+    sc(wsD, `${c}23`, null, { f: `${c}19+${c}20-${c}21-${c}22`, z: NUM })
+  }
+
+  // ---- Rows 25-26: Historical reference ----
+  let r = 25
+  if (histCF.some(s => s.operatingCashflow != null)) {
+    d(`A${r}`, 'Operating Cash Flow (actual)')
+    setHist(r, histCF.map(s => toM(s.operatingCashflow)), NUM)
+    r++
+  }
+  if (histIncome.some(s => s.netIncome != null)) {
+    d(`A${r}`, 'Net Income (actual)')
+    setHist(r, histIncome.map(s => toM(s.netIncome)), NUM)
+    r++
+  }
+
+  // ---- DCF VALUATION (all formulas) ----
+  r += 2
+  d(`A${r}`, '--- DCF VALUATION ---')
+  r++
+
+  const wR = r // WACC row
+  d(`A${wR}`, 'WACC')
+  sc(wsD, `B${wR}`, null, { f: 'Assumptions!B33', z: PCT })
+  r++
+
+  const gR = r // Terminal growth row
+  d(`A${gR}`, 'Terminal Growth Rate')
+  sc(wsD, `B${gR}`, null, { f: 'Assumptions!B31', z: PCT })
+  r += 2
+
+  // Discount factors (row dfR)
+  const dfR = r
+  d(`A${dfR}`, 'Discount Factor')
+  for (let i = 0; i < 5; i++) {
+    sc(wsD, `${PROJ[i]}${dfR}`, null, { f: `1/(1+$B$${wR})^${i + 1}`, z: '0.0000' })
+  }
+  r++
+
+  // PV of each year's FCF (row pvR)
+  const pvR = r
+  d(`A${pvR}`, 'PV of FCF')
+  for (let i = 0; i < 5; i++) {
+    sc(wsD, `${PROJ[i]}${pvR}`, null, { f: `${PROJ[i]}23*${PROJ[i]}${dfR}`, z: NUM })
+  }
+  r += 2
+
+  // Sum of PV FCFs
+  const spR = r
+  d(`A${spR}`, 'Sum of PV of FCFs')
+  sc(wsD, `B${spR}`, null, { f: `SUM(F${pvR}:J${pvR})`, z: NUM })
+  r++
+
+  // Terminal FCF = Year5 FCF * (1 + g)
+  const tfR = r
+  d(`A${tfR}`, 'Terminal FCF')
+  sc(wsD, `B${tfR}`, null, { f: `J23*(1+B${gR})`, z: NUM })
+  r++
+
+  // Terminal Value = Terminal FCF / (WACC - g)
+  const tvR = r
+  d(`A${tvR}`, 'Terminal Value')
+  sc(wsD, `B${tvR}`, null, { f: `B${tfR}/(B${wR}-B${gR})`, z: NUM })
+  r++
+
+  // PV of Terminal Value = TV * discount factor year 5
+  const ptR = r
+  d(`A${ptR}`, 'PV of Terminal Value')
+  sc(wsD, `B${ptR}`, null, { f: `B${tvR}*J${dfR}`, z: NUM })
+  r += 2
+
+  // Enterprise Value = Sum PV FCFs + PV Terminal Value
+  const evR = r
+  d(`A${evR}`, 'Enterprise Value')
+  sc(wsD, `B${evR}`, null, { f: `B${spR}+B${ptR}`, z: NUM })
+  r++
+
+  // Net Debt (from Assumptions)
+  const ndR = r
+  d(`A${ndR}`, '  (-) Net Debt')
+  sc(wsD, `B${ndR}`, null, { f: 'Assumptions!B39', z: NUM })
+  r++
+
+  // Implied Equity Value = EV - Net Debt
+  const eqR = r
+  d(`A${eqR}`, 'Implied Equity Value')
+  sc(wsD, `B${eqR}`, null, { f: `B${evR}-B${ndR}`, z: NUM })
+  r += 2
+
+  // Market Cap & upside (formulas)
   if (financials.marketCap) {
-    rows.push(emptyRow())
-    rows.push(['Current Market Cap', Math.round(financials.marketCap)])
-    const upside = (equityValue - financials.marketCap) / financials.marketCap
-    rows.push(['Implied Upside / Downside', fmtPct(upside)])
+    const mcR = r
+    d(`A${mcR}`, 'Current Market Cap')
+    sc(wsD, `B${mcR}`, null, { f: 'Assumptions!B42', z: NUM })
+    r++
+    d(`A${r}`, 'Implied Upside / Downside')
+    sc(wsD, `B${r}`, null, { f: `IF(B${mcR}<>0,(B${eqR}-B${mcR})/B${mcR},"")`, z: PCT })
+    r++
   }
 
-  const ws1 = XLSX.utils.aoa_to_sheet(rows)
-  ws1['!cols'] = [
-    { wch: 30 }, // A: labels
-    { wch: 16 }, // B: hist 1
-    { wch: 16 }, // C: hist 2
-    { wch: 16 }, // D: hist 3
-    { wch: 3 },  // E: spacer
-    { wch: 16 }, // F: proj 1
-    { wch: 16 }, // G: proj 2
-    { wch: 16 }, // H: proj 3
-    { wch: 16 }, // I: proj 4
-    { wch: 16 }, // J: proj 5
+  wsD['!ref'] = `A1:J${r}`
+  wsD['!cols'] = [
+    { wch: 30 }, { wch: 14 }, { wch: 14 }, { wch: 14 },
+    { wch: 3 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 },
   ]
-  XLSX.utils.book_append_sheet(wb, ws1, 'DCF Model')
+  XLSX.utils.book_append_sheet(wb, wsD, 'DCF Model')
 
-  // ---- SHEET 2: Assumptions & Justifications ----
-  const justRows = [
-    [`${companyName} (${ticker}) — DCF Assumptions & Justifications`],
-    [],
-    ['Assumption', 'Value', 'Source / Justification'],
-    [],
-    ['BASE YEAR DATA', '', `FY${baseYear} (most recent annual filing)`],
-    ['Base Revenue', `${currency} ${fmtM(baseRevenue)}`, `From income statement ending ${latestIncome.date || 'N/A'}`],
-    ['Base EBIT', `${currency} ${fmtM(baseEBIT)}`, `Operating income from income statement`],
-    [],
-    ['GROWTH ASSUMPTIONS'],
-    ['Revenue Growth (Year 1)', fmtPct(revenueGrowthRates[0]),
-      `Based on actual YoY growth of ${fmtPct(historicalRevenueGrowth)} (${currency} ${fmtM(prevRevenue)} → ${fmtM(baseRevenue)}). Tapered to terminal rate over 5 years.`],
-    ['Revenue Growth (Year 2)', fmtPct(revenueGrowthRates[1]), 'Linear interpolation toward terminal growth'],
-    ['Revenue Growth (Year 3)', fmtPct(revenueGrowthRates[2]), 'Linear interpolation toward terminal growth'],
-    ['Revenue Growth (Year 4)', fmtPct(revenueGrowthRates[3]), 'Linear interpolation toward terminal growth'],
-    ['Revenue Growth (Year 5)', fmtPct(revenueGrowthRates[4]), 'Approaching long-term nominal GDP growth rate'],
-    [],
-    ['MARGIN & COST ASSUMPTIONS'],
-    ['EBIT Margin (constant)', fmtPct(ebitMargin),
-      `Held at latest reported margin. EBIT of ${currency} ${fmtM(baseEBIT)} on revenue of ${currency} ${fmtM(baseRevenue)}.`],
-    ['Effective Tax Rate', fmtPct(effectiveTaxRate),
-      `Derived from tax expense ${currency} ${fmtM(taxExpense)} / pre-tax income ${currency} ${fmtM(preTaxIncome)}.`],
-    ['D&A (% of Revenue)', fmtPct(daToRevenue),
-      `Based on reported D&A of ${currency} ${fmtM(baseDA)} (${fmtPct(daToRevenue)} of revenue).`],
-    ['CapEx (% of Revenue)', fmtPct(capexToRevenue),
-      `Based on reported capex of ${currency} ${fmtM(baseCapex)} (${fmtPct(capexToRevenue)} of revenue).`],
-    ['Working Capital (% of Rev)', fmtPct(wcToRevenue),
-      `Based on reported WC change of ${currency} ${fmtM(baseWC)}.`],
-    [],
-    ['WACC COMPONENTS'],
-    ['WACC', fmtPct(wacc), 'Weighted average: E/(D+E) × Ke + D/(D+E) × Kd × (1-t)'],
-    ['Cost of Equity (Ke)', fmtPct(costOfEquity),
-      `CAPM: Rf(${fmtPct(riskFreeRate)}) + β(${beta.toFixed(2)}) × ERP(${fmtPct(marketPremium)}). Beta from Yahoo Finance.`],
-    ['Cost of Debt (Kd)', fmtPct(costOfDebt), 'Estimated from investment-grade corporate bond yields'],
-    ['Equity Weight', fmtPct(equityRatio),
-      `Balance sheet: Equity ${currency} ${fmtM(latestBS.totalStockholderEquity)}, LT Debt ${currency} ${fmtM(latestBS.longTermDebt)}`],
-    ['Debt Weight', fmtPct(debtRatio), 'Complement of equity weight'],
-    ['Terminal Growth', fmtPct(terminalGrowth), 'Standard 2.5% long-term nominal GDP growth assumption'],
-    [],
-    ['DATA SOURCES'],
-    ['Financial Statements', '', 'Yahoo Finance fundamentalsTimeSeries API (annual financials, cash-flow, balance-sheet)'],
-    ['Beta', beta.toFixed(2), 'Yahoo Finance defaultKeyStatistics'],
-    ['Risk-Free Rate', fmtPct(riskFreeRate), 'Approximate 10-year government bond yield'],
-    ['Market Risk Premium', fmtPct(marketPremium), 'Long-term equity risk premium estimate'],
-  ]
-
-  const ws2 = XLSX.utils.aoa_to_sheet(justRows)
-  ws2['!cols'] = [{ wch: 30 }, { wch: 18 }, { wch: 90 }]
-  XLSX.utils.book_append_sheet(wb, ws2, 'Assumptions')
-
-  // ---- SHEET 3: Raw Financial Data ----
+  // ================================================================
+  // SHEET 3: RAW FINANCIAL DATA (static, in $M)
+  // ================================================================
   const rawRows = [
-    [`${companyName} (${ticker}) — Raw Financial Data from Yahoo Finance`],
-    [`${incomeStatements.length} income statements, ${cashflowStatements.length} cash flow statements, ${balanceSheets.length} balance sheets`],
+    [`${companyName} (${ticker}) — Raw Financial Data (Yahoo Finance)`],
+    ['All figures in $M'],
+    [`${incomeStatements.length} income stmts, ${cashflowStatements.length} cash flow stmts, ${balanceSheets.length} balance sheets`],
     [],
     ['=== INCOME STATEMENTS ==='],
-    ['Period End', 'Revenue', 'Gross Profit', 'Operating Income', 'EBIT', 'Pre-Tax Income', 'Tax Expense', 'Net Income'],
+    ['Period End', 'Revenue', 'Gross Profit', 'Operating Inc.', 'EBIT', 'Pre-Tax Inc.', 'Tax Expense', 'Net Income'],
   ]
   if (incomeStatements.length === 0) {
-    rawRows.push(['No income statement data available from Yahoo Finance for this ticker'])
+    rawRows.push(['No income statement data available'])
   }
   for (const s of incomeStatements) {
-    rawRows.push([s.date, n(s.totalRevenue), n(s.grossProfit), n(s.operatingIncome), n(s.ebit), n(s.incomeBeforeTax), n(s.incomeTaxExpense), n(s.netIncome)])
+    rawRows.push([s.date, toM(s.totalRevenue), toM(s.grossProfit), toM(s.operatingIncome), toM(s.ebit), toM(s.incomeBeforeTax), toM(s.incomeTaxExpense), toM(s.netIncome)])
   }
 
   rawRows.push([])
   rawRows.push(['=== CASH FLOW STATEMENTS ==='])
-  rawRows.push(['Period End', 'Operating CF', 'CapEx', 'Depreciation & Amort.', 'Change in Working Capital'])
+  rawRows.push(['Period End', 'Operating CF', 'CapEx', 'D&A', 'Chg in WC'])
   if (cashflowStatements.length === 0) {
-    rawRows.push(['No cash flow data available from Yahoo Finance for this ticker'])
+    rawRows.push(['No cash flow data available'])
   }
   for (const s of cashflowStatements) {
-    rawRows.push([s.date, n(s.operatingCashflow), n(s.capex), n(s.depreciation), n(s.changeInWorkingCapital)])
+    rawRows.push([s.date, toM(s.operatingCashflow), toM(s.capex), toM(s.depreciation), toM(s.changeInWorkingCapital)])
   }
 
   rawRows.push([])
   rawRows.push(['=== BALANCE SHEETS ==='])
-  rawRows.push(['Period End', 'Total Assets', 'Total Liabilities', 'Stockholder Equity', 'Cash', 'Short-Term Debt', 'Long-Term Debt'])
+  rawRows.push(['Period End', 'Total Assets', 'Total Liab.', 'Equity', 'Cash', 'ST Debt', 'LT Debt'])
   if (balanceSheets.length === 0) {
-    rawRows.push(['No balance sheet data available from Yahoo Finance for this ticker'])
+    rawRows.push(['No balance sheet data available'])
   }
   for (const s of balanceSheets) {
-    rawRows.push([s.date, n(s.totalAssets), n(s.totalLiab), n(s.totalStockholderEquity), n(s.cash), n(s.shortLongTermDebt), n(s.longTermDebt)])
+    rawRows.push([s.date, toM(s.totalAssets), toM(s.totalLiab), toM(s.totalStockholderEquity), toM(s.cash), toM(s.shortLongTermDebt), toM(s.longTermDebt)])
   }
 
   const ws3 = XLSX.utils.aoa_to_sheet(rawRows)
-  ws3['!cols'] = [{ wch: 14 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }]
+  ws3['!cols'] = [{ wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }]
   XLSX.utils.book_append_sheet(wb, ws3, 'Raw Data')
 
   // Generate and download
