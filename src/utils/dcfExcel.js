@@ -22,7 +22,7 @@ export function generateDCF(financials) {
   const prevRevenue = prevIncome.totalRevenue || 0
   const historicalRevenueGrowth = prevRevenue ? (baseRevenue - prevRevenue) / prevRevenue : 0.05
 
-  const baseEBIT = latestIncome.ebit || latestIncome.operatingIncome || 0
+  const baseEBIT = latestIncome.ebit || latestIncome.operatingIncome || latestIncome.incomeBeforeTax || latestIncome.netIncome || 0
   const ebitMargin = baseRevenue ? baseEBIT / baseRevenue : 0.10
 
   const taxExpense = latestIncome.incomeTaxExpense || 0
@@ -128,7 +128,8 @@ export function generateDCF(financials) {
   a('A17', 'OPERATING ASSUMPTIONS')
   a('A18', 'EBIT Margin')
   a('B18', ebitMargin, { z: PCT })
-  a('C18', `EBIT ${fmtM(baseEBIT)} on revenue ${fmtM(baseRevenue)}`)
+  const ebitLabel = latestIncome.ebit ? 'EBIT' : latestIncome.operatingIncome ? 'Operating Inc.' : latestIncome.incomeBeforeTax ? 'Pre-tax Income (proxy)' : 'Net Income (proxy)'
+  a('C18', `${ebitLabel} ${fmtM(baseEBIT)} on revenue ${fmtM(baseRevenue)}`)
   a('A19', 'Effective Tax Rate')
   a('B19', effectiveTaxRate, { z: PCT })
   a('C19', `Tax ${fmtM(taxExpense)} / pre-tax income ${fmtM(preTaxIncome)}`)
@@ -241,13 +242,13 @@ export function generateDCF(financials) {
 
   // ---- Row 9: EBIT ----
   d('A9', 'EBIT (Operating Income)')
-  setHist(9, histIncome.map(s => toM(s.ebit || s.operatingIncome)), NUM)
+  setHist(9, histIncome.map(s => toM(s.ebit || s.operatingIncome || s.incomeBeforeTax || s.netIncome)), NUM)
   for (let i = 0; i < 5; i++) sc(wsD, `${PROJ[i]}9`, null, { f: `${PROJ[i]}6*Assumptions!B18`, z: NUM })
 
   // ---- Row 10: EBIT Margin ----
   d('A10', '  EBIT Margin %')
   for (let i = 0; i < histCount; i++) {
-    const ebit = histIncome[i].ebit || histIncome[i].operatingIncome
+    const ebit = histIncome[i].ebit || histIncome[i].operatingIncome || histIncome[i].incomeBeforeTax || histIncome[i].netIncome
     const rev = histIncome[i].totalRevenue
     if (ebit && rev) d(`${HIST_COLS[hPad + i]}10`, ebit / rev, { z: PCT })
   }

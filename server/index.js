@@ -285,7 +285,7 @@ app.get('/api/stock/:name/financials', async (req, res) => {
         totalRevenue: entry.totalRevenue ?? entry.operatingRevenue ?? entry.netInterestIncome ?? null,
         grossProfit: entry.grossProfit ?? null,
         operatingIncome: entry.operatingIncome ?? null,
-        ebit: entry.EBIT ?? entry.operatingIncome ?? null,
+        ebit: entry.EBIT ?? entry.operatingIncome ?? entry.pretaxIncome ?? null,
         netIncome: entry.netIncome ?? entry.netIncomeCommonStockholders ?? null,
         incomeTaxExpense: entry.taxProvision ?? null,
         incomeBeforeTax: entry.pretaxIncome ?? null,
