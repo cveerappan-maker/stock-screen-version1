@@ -269,15 +269,24 @@ app.get('/api/stock/:name/financials', async (req, res) => {
     }
 
     // Parse from fundamentalsTimeSeries
+    // Log available keys for debugging (first entry only)
+    if (ftsData.length > 0) {
+      const sampleKeys = Object.keys(ftsData[0]).filter(k => k !== 'date' && k !== 'TYPE' && k !== 'periodType')
+      console.log(`[${ticker}] FTS sample fields: ${sampleKeys.slice(0, 15).join(', ')}${sampleKeys.length > 15 ? '...' : ''}`)
+    }
+
+    // Income filter: accept entries with revenue OR net income (banks use netInterestIncome instead of totalRevenue)
     let incomeHist = ftsData
-      .filter(entry => entry.totalRevenue != null || entry.netIncome != null)
+      .filter(entry => entry.totalRevenue != null || entry.netIncome != null
+        || entry.netInterestIncome != null || entry.operatingIncome != null
+        || entry.netIncomeCommonStockholders != null || entry.EBIT != null)
       .map(entry => ({
         date: toDateStr(entry.date),
-        totalRevenue: entry.totalRevenue ?? null,
+        totalRevenue: entry.totalRevenue ?? entry.operatingRevenue ?? entry.netInterestIncome ?? null,
         grossProfit: entry.grossProfit ?? null,
         operatingIncome: entry.operatingIncome ?? null,
         ebit: entry.EBIT ?? entry.operatingIncome ?? null,
-        netIncome: entry.netIncome ?? null,
+        netIncome: entry.netIncome ?? entry.netIncomeCommonStockholders ?? null,
         incomeTaxExpense: entry.taxProvision ?? null,
         incomeBeforeTax: entry.pretaxIncome ?? null,
       }))
