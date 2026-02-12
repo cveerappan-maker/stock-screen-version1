@@ -254,7 +254,7 @@ app.get('/api/stock/:name/financials', async (req, res) => {
       return null
     }
 
-    // Fetch financial statements via fundamentalsTimeSeries (replaces deprecated quoteSummary modules)
+    // Fetch financial statements via fundamentalsTimeSeries (primary source)
     const ftsStart = new Date(Date.now() - 6 * 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     let ftsData = []
     try {
@@ -265,11 +265,11 @@ app.get('/api/stock/:name/financials', async (req, res) => {
       })
       console.log(`[${ticker}] fundamentalsTimeSeries returned ${ftsData.length} periods`)
     } catch (err) {
-      console.warn(`fundamentalsTimeSeries failed for ${ticker}:`, err.message)
+      console.warn(`[${ticker}] fundamentalsTimeSeries failed:`, err.message)
     }
 
-    // Parse income statement data from fundamentalsTimeSeries results
-    const incomeHist = ftsData
+    // Parse from fundamentalsTimeSeries
+    let incomeHist = ftsData
       .filter(entry => entry.totalRevenue != null || entry.netIncome != null)
       .map(entry => ({
         date: toDateStr(entry.date),
@@ -283,10 +283,8 @@ app.get('/api/stock/:name/financials', async (req, res) => {
       }))
       .filter(s => s.date)
       .sort((a, b) => a.date.localeCompare(b.date))
-    console.log(`[${ticker}] Income statements parsed: ${incomeHist.length}`)
 
-    // Parse cash flow data from fundamentalsTimeSeries results
-    const cashflowHist = ftsData
+    let cashflowHist = ftsData
       .filter(entry => entry.operatingCashFlow != null || entry.capitalExpenditure != null)
       .map(entry => ({
         date: toDateStr(entry.date),
@@ -297,10 +295,8 @@ app.get('/api/stock/:name/financials', async (req, res) => {
       }))
       .filter(s => s.date)
       .sort((a, b) => a.date.localeCompare(b.date))
-    console.log(`[${ticker}] Cash flow statements parsed: ${cashflowHist.length}`)
 
-    // Parse balance sheet data from fundamentalsTimeSeries results
-    const balanceHist = ftsData
+    let balanceHist = ftsData
       .filter(entry => entry.totalAssets != null || entry.stockholdersEquity != null)
       .map(entry => ({
         date: toDateStr(entry.date),
@@ -313,7 +309,57 @@ app.get('/api/stock/:name/financials', async (req, res) => {
       }))
       .filter(s => s.date)
       .sort((a, b) => a.date.localeCompare(b.date))
-    console.log(`[${ticker}] Balance sheet statements parsed: ${balanceHist.length}`)
+
+    console.log(`[${ticker}] FTS parsed: ${incomeHist.length} income, ${cashflowHist.length} CF, ${balanceHist.length} BS`)
+
+    // Fallback: if fundamentalsTimeSeries returned no income data, try quoteSummary with validation disabled
+    if (incomeHist.length === 0) {
+      console.log(`[${ticker}] No FTS data — falling back to quoteSummary (validateResult: false)`)
+      try {
+        const fsSummary = await yahooFinance.quoteSummary(ticker, {
+          modules: ['incomeStatementHistory', 'cashflowStatementHistory', 'balanceSheetHistory']
+        }, { validateResult: false })
+
+        const rawIncome = fsSummary.incomeStatementHistory?.incomeStatementHistory || []
+        const incomeArr = Array.isArray(rawIncome) ? rawIncome : []
+        incomeHist = incomeArr.map(stmt => ({
+          date: toDateStr(stmt.endDate),
+          totalRevenue: stmt.totalRevenue ?? null,
+          grossProfit: stmt.grossProfit ?? null,
+          operatingIncome: stmt.operatingIncome ?? null,
+          ebit: stmt.ebit ?? stmt.operatingIncome ?? null,
+          netIncome: stmt.netIncome ?? null,
+          incomeTaxExpense: stmt.incomeTaxExpense ?? null,
+          incomeBeforeTax: stmt.incomeBeforeTax ?? null,
+        })).filter(s => s.date).sort((a, b) => a.date.localeCompare(b.date))
+
+        const rawCF = fsSummary.cashflowStatementHistory?.cashflowStatements || []
+        const cfArr = Array.isArray(rawCF) ? rawCF : []
+        cashflowHist = cfArr.map(stmt => ({
+          date: toDateStr(stmt.endDate),
+          operatingCashflow: stmt.totalCashFromOperatingActivities ?? stmt.operatingCashflow ?? null,
+          capex: stmt.capitalExpenditures ?? stmt.capex ?? null,
+          depreciation: stmt.depreciation ?? null,
+          changeInWorkingCapital: stmt.changeToOperatingActivities ?? stmt.changeInWorkingCapital ?? null,
+        })).filter(s => s.date).sort((a, b) => a.date.localeCompare(b.date))
+
+        const rawBS = fsSummary.balanceSheetHistory?.balanceSheetStatements || []
+        const bsArr = Array.isArray(rawBS) ? rawBS : []
+        balanceHist = bsArr.map(stmt => ({
+          date: toDateStr(stmt.endDate),
+          totalAssets: stmt.totalAssets ?? null,
+          totalLiab: stmt.totalLiab ?? stmt.totalLiabilities ?? null,
+          totalStockholderEquity: stmt.totalStockholderEquity ?? stmt.totalEquity ?? null,
+          cash: stmt.cash ?? stmt.cashAndCashEquivalents ?? null,
+          shortLongTermDebt: stmt.shortLongTermDebt ?? stmt.shortTermDebt ?? null,
+          longTermDebt: stmt.longTermDebt ?? null,
+        })).filter(s => s.date).sort((a, b) => a.date.localeCompare(b.date))
+
+        console.log(`[${ticker}] Fallback parsed: ${incomeHist.length} income, ${cashflowHist.length} CF, ${balanceHist.length} BS`)
+      } catch (err) {
+        console.warn(`[${ticker}] quoteSummary fallback also failed:`, err.message)
+      }
+    }
 
     // Derive performance drivers from the data
     const drivers = []
