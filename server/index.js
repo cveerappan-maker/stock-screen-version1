@@ -42,10 +42,10 @@ async function fetchTickerHistory(ticker, startDate, endDate) {
     if (!result?.quotes?.length) return null
 
     const quotes = result.quotes
-      .filter(q => q.close != null)
+      .filter(q => (q.adjclose ?? q.close) != null)
       .map(q => ({
         date: new Date(q.date).toISOString().split('T')[0],
-        close: q.close,
+        close: q.adjclose ?? q.close,
       }))
 
     return quotes
