@@ -10,6 +10,14 @@ export async function fetchThemePerformance(startDate, endDate) {
   return res.json()
 }
 
+export async function fetchStockFinancials(companyName) {
+  const res = await fetch(`${API_BASE}/stock/${encodeURIComponent(companyName)}/financials`)
+  if (!res.ok) {
+    throw new Error(`API error: ${res.status}`)
+  }
+  return res.json()
+}
+
 export async function checkApiHealth() {
   try {
     const res = await fetch(`${API_BASE}/health`)
