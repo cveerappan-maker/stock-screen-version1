@@ -202,8 +202,8 @@ export default function ThemeDetailPanel({ theme, onClose }) {
   const [selectedStock, setSelectedStock] = useState(null)
 
   function handleBarClick(data) {
-    if (!data?.activePayload?.length) return
-    const clicked = data.activePayload[0].payload
+    if (!data?.payload) return
+    const clicked = data.payload
     setSelectedStock(prev => prev?.name === clicked.name ? null : clicked)
   }
 
@@ -288,7 +288,6 @@ export default function ThemeDetailPanel({ theme, onClose }) {
                 data={holdingData}
                 layout="vertical"
                 margin={{ top: 5, right: 30, left: 10, bottom: 5 }}
-                onClick={handleBarClick}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="#1a2235" horizontal={false} />
                 <XAxis
@@ -307,7 +306,7 @@ export default function ThemeDetailPanel({ theme, onClose }) {
                 />
                 <Tooltip content={<HoldingTooltip />} cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
                 <ReferenceLine x={0} stroke="#94a3b8" strokeDasharray="3 3" />
-                <Bar dataKey="returnPct" radius={[0, 4, 4, 0]} barSize={18} style={{ cursor: 'pointer' }}>
+                <Bar dataKey="returnPct" radius={[0, 4, 4, 0]} barSize={18} style={{ cursor: 'pointer' }} onClick={handleBarClick}>
                   {holdingData.map((entry, idx) => (
                     <Cell
                       key={idx}
